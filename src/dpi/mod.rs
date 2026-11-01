@@ -61,9 +61,13 @@ pub fn start_dpi_proxy() -> Result<DpiProxyHandle, Box<dyn std::error::Error + S
             };
 
             let config = Arc::new(DesyncConfig::default());
+            let vpn_status = match crate::dpi::strategy::detect_vpn_interface() {
+                Some(ref iface) => format!("VPN Active ({iface}) -> Auto Pass-through"),
+                None => "Direct ISP -> Anti-DPI Desync".to_string(),
+            };
             println!(
-                "[DPI-BYPASS] ⚡ Proxy online at 127.0.0.1:{port} | Mode: {:?} | Delay: {}ms | Fake: {:?}",
-                config.mode, config.delay_ms, config.fake_sni
+                "[DPI-BYPASS] ⚡ Proxy online at 127.0.0.1:{port} | Mode: {:?} ({vpn_status}) | Delay: {}ms",
+                config.mode, config.delay_ms
             );
 
             let _ = tx.send(Ok(port));

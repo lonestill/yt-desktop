@@ -4,7 +4,7 @@ use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
-use crate::dpi::strategy::{DesyncConfig, DesyncMode};
+use crate::dpi::strategy::{detect_vpn_interface, DesyncConfig, DesyncMode};
 use crate::dpi::tls::{parse_client_hello_sni, split_into_tls_records};
 
 static CONN_COUNTER: AtomicUsize = AtomicUsize::new(1);
@@ -45,7 +45,19 @@ pub async fn handle_desync_tunnel(
     let is_targeted = config.is_target(&effective_host);
 
     if is_targeted && sni.is_some() {
-        let split_pts = match config.mode {
+        let effective_mode = match config.mode {
+            DesyncMode::Auto => {
+                if let Some(ref iface) = detect_vpn_interface() {
+                    println!("[CONN #{conn_id}] 🛡️ VPN active ({iface}) -> direct pass-through");
+                    DesyncMode::None
+                } else {
+                    DesyncMode::FirstByte
+                }
+            }
+            other => other,
+        };
+
+        let split_pts = match effective_mode {
             DesyncMode::FirstByte => vec![1],
             DesyncMode::MultiSplit => {
                 let mut pts = vec![1];
@@ -69,7 +81,7 @@ pub async fn handle_desync_tunnel(
                     vec![1]
                 }
             }
-            DesyncMode::None => vec![],
+            DesyncMode::None | DesyncMode::Auto => vec![],
         };
 
         if !split_pts.is_empty() {
