@@ -1,0 +1,71 @@
+/* ==========================================================================
+   yt-desktop: High-Performance AdBlock & Clean Layout Engine
+   ========================================================================== */
+
+/* 1. Eliminate all banner ads, sponsored cards, masthead ads, promos */
+ytd-ad-slot-renderer,
+ytd-rich-item-renderer:has(ytd-ad-slot-renderer),
+ytd-in-feed-ad-layout-renderer,
+ytd-banner-promo-renderer,
+ytd-statement-banner-renderer,
+#player-ads,
+.ytp-ad-module,
+.ytp-ad-overlay-container,
+.ytp-ad-message-container,
+.ytp-ad-action-interstitial,
+.ytp-ad-image-overlay,
+.ytp-ad-text-overlay,
+#masthead-ad,
+ytd-rich-section-renderer:has(#masthead-ad),
+ytd-merch-shelf-renderer,
+#panels:has(ytd-ads-engagement-panel-content-renderer),
+ytd-engagement-panel-section-list-renderer[target-id="engagement-panel-ads"],
+ytd-button-renderer:has([aria-label*="Premium"]),
+ytd-mealbar-promo-renderer,
+yt-mealbar-promo-renderer,
+#clarify-box,
+#offer-module,
+ytd-brand-video-singleton-renderer {
+    display: none !important;
+}
+
+/* 2. Eliminate Anti-Adblock modal dialogs and backdrops */
+tp-yt-paper-dialog:has(ytd-enforcement-message-view-model),
+ytd-enforcement-message-view-model,
+tp-yt-paper-dialog:has(#feedback.ytd-enforcement-message-view-model) {
+    display: none !important;
+}
+tp-yt-iron-overlay-backdrop {
+    display: none !important;
+}
+
+/* 3. Picture-in-Picture Button in player controls */
+.yt-desktop-pip-btn {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 100%;
+    cursor: pointer;
+    background: transparent;
+    border: none;
+    outline: none;
+    padding: 0;
+    margin: 0;
+    opacity: 0.85;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.yt-desktop-pip-btn:hover {
+    opacity: 1;
+    transform: scale(1.08);
+}
+.yt-desktop-pip-btn svg {
+    width: 20px;
+    height: 20px;
+    fill: #ffffff;
+}
+
+/* 4. Clean up dark mode background */
+html[dark], [dark] {
+    --yt-spec-base-background: #0f0f0f !important;
+}
