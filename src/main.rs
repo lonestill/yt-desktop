@@ -1,3 +1,5 @@
+mod dpi;
+
 use std::fs;
 use std::path::PathBuf;
 use tao::{
@@ -6,7 +8,7 @@ use tao::{
     event_loop::{ControlFlow, EventLoopBuilder},
     window::{Theme, Window, WindowBuilder},
 };
-use wry::{BackgroundThrottlingPolicy, WebContext, WebViewBuilder};
+use wry::{BackgroundThrottlingPolicy, ProxyConfig, ProxyEndpoint, WebContext, WebViewBuilder};
 use serde::{Deserialize, Serialize};
 
 const INJECT_CSS: &str = include_str!("styles.css");
@@ -74,6 +76,15 @@ fn main() {
     let app_dir = get_app_dir();
     let window_state = load_window_state(&app_dir);
 
+    // 1. Initialize embedded DPI bypass proxy engine
+    let dpi_handle = match dpi::start_dpi_proxy() {
+        Ok(h) => Some(h),
+        Err(e) => {
+            eprintln!("[DPI-BYPASS] Warning: could not initialize DPI proxy: {e}");
+            None
+        }
+    };
+
     let event_loop = EventLoopBuilder::<AppEvent>::with_user_event().build();
     let proxy = event_loop.create_proxy();
 
@@ -104,7 +115,7 @@ fn main() {
         INJECT_JS
     );
 
-    let _webview = WebViewBuilder::new_with_web_context(&mut web_context)
+    let mut webview_builder = WebViewBuilder::new_with_web_context(&mut web_context)
         .with_autoplay(true)
         .with_back_forward_navigation_gestures(true)
         .with_accept_first_mouse(true)
@@ -113,7 +124,17 @@ fn main() {
         .with_user_agent(
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Safari/605.1.15",
         )
-        .with_initialization_script(&init_script)
+        .with_initialization_script(&init_script);
+
+    // Route traffic through embedded DPI bypass proxy
+    if let Some(ref handle) = dpi_handle {
+        webview_builder = webview_builder.with_proxy_config(ProxyConfig::Http(ProxyEndpoint {
+            host: "127.0.0.1".to_string(),
+            port: handle.port.to_string(),
+        }));
+    }
+
+    let _webview = webview_builder
         .with_ipc_handler(move |req| {
             let body = req.body();
             if let Ok(msg) = serde_json::from_str::<IpcMessage>(body) {

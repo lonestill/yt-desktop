@@ -1,0 +1,101 @@
+use crate::dpi::tls::SniInfo;
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DesyncMode {
+    /// Split the TLS ClientHello right in the middle of the SNI domain name.
+    SniSplit,
+    /// Split right after the first few bytes of the TLS record header (e.g. 2-5 bytes).
+    HeadSplit,
+    /// Split into multiple small fragments (header + middle of SNI + post-SNI).
+    MultiSplit,
+}
+
+#[derive(Debug, Clone)]
+pub struct DesyncConfig {
+    pub mode: DesyncMode,
+    pub split_offset: usize, // Offset inside SNI (default: 2)
+    pub delay_ms: u64,       // Micro-delay in milliseconds between packet chunks (default: 2)
+    pub target_domains: Vec<String>,
+}
+
+impl Default for DesyncConfig {
+    fn default() -> Self {
+        Self {
+            mode: DesyncMode::SniSplit,
+            split_offset: 2,
+            delay_ms: 2,
+            target_domains: vec![
+                "googlevideo.com".to_string(),
+                "youtube.com".to_string(),
+                "ytimg.com".to_string(),
+                "ggpht.com".to_string(),
+                "youtu.be".to_string(),
+                "gvt1.com".to_string(),
+                "googleapis.com".to_string(),
+                "google.com".to_string(),
+                "youtube-nocookie.com".to_string(),
+                "yt.be".to_string(),
+                "video.google.com".to_string(),
+            ],
+        }
+    }
+}
+
+impl DesyncConfig {
+    /// Checks if a given domain or SNI matches the target list.
+    pub fn is_target(&self, hostname: &str) -> bool {
+        if self.target_domains.is_empty() {
+            return true;
+        }
+        let lower = hostname.to_lowercase();
+        self.target_domains.iter().any(|d| lower.ends_with(d) || lower == *d)
+    }
+
+    /// Computes split indices for a given buffer.
+    pub fn compute_split_points(&self, data: &[u8], sni: Option<&SniInfo>) -> Vec<usize> {
+        let mut cuts = Vec::new();
+
+        if let Some(sni_info) = sni {
+            match self.mode {
+                DesyncMode::SniSplit => {
+                    let offset = std::cmp::min(self.split_offset, sni_info.sni_len.saturating_sub(1));
+                    let cut = sni_info.sni_offset + offset;
+                    if cut > 0 && cut < data.len() {
+                        cuts.push(cut);
+                    }
+                }
+                DesyncMode::HeadSplit => {
+                    let cut = std::cmp::min(self.split_offset.max(2), data.len().saturating_sub(1));
+                    if cut > 0 && cut < data.len() {
+                        cuts.push(cut);
+                    }
+                }
+                DesyncMode::MultiSplit => {
+                    // Cut 1: After TLS header (byte 3)
+                    if data.len() > 3 {
+                        cuts.push(3);
+                    }
+                    // Cut 2: In the middle of SNI
+                    let offset = std::cmp::min(self.split_offset, sni_info.sni_len.saturating_sub(1));
+                    let cut_sni = sni_info.sni_offset + offset;
+                    if cut_sni > 3 && cut_sni < data.len() {
+                        cuts.push(cut_sni);
+                    }
+                    // Cut 3: End of SNI
+                    let cut_end_sni = sni_info.sni_offset + sni_info.sni_len;
+                    if cut_end_sni > cut_sni && cut_end_sni < data.len() {
+                        cuts.push(cut_end_sni);
+                    }
+                }
+            }
+        } else if data.len() > 5 {
+            // Generic fallback cut for unparsed packets
+            cuts.push(3);
+        }
+
+        cuts.sort_unstable();
+        cuts.dedup();
+        cuts
+    }
+}
