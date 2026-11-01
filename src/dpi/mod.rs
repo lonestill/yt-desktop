@@ -40,9 +40,13 @@ pub fn start_dpi_proxy() -> Result<DpiProxyHandle, Box<dyn std::error::Error + S
                 }
             };
 
-            let _ = tx.send(Ok(port));
-
             let config = Arc::new(DesyncConfig::default());
+            println!(
+                "[DPI-BYPASS] ⚡ Proxy online at 127.0.0.1:{port} | Mode: {:?} | Delay: {}ms | Fake: {:?}",
+                config.mode, config.delay_ms, config.fake_sni
+            );
+
+            let _ = tx.send(Ok(port));
             let _ = server::run_embedded_proxy(listener, config).await;
         });
     });
@@ -51,6 +55,5 @@ pub fn start_dpi_proxy() -> Result<DpiProxyHandle, Box<dyn std::error::Error + S
         .recv()?
         .map_err(|e| format!("Failed to start DPI proxy: {e}"))?;
 
-    println!("[DPI-BYPASS] ⚡ Embedded anti-DPI proxy online at 127.0.0.1:{port} (Hybrid SOCKS5 + HTTP CONNECT)");
     Ok(DpiProxyHandle { port })
 }

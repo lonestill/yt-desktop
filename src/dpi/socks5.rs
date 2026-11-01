@@ -36,7 +36,6 @@ pub async fn handle_socks5_client(
 
     let (target_host, target_port) = match atyp {
         0x01 => {
-            // IPv4
             let mut ip_buf = [0u8; 4];
             stream.read_exact(&mut ip_buf).await?;
             let mut port_buf = [0u8; 2];
@@ -46,7 +45,6 @@ pub async fn handle_socks5_client(
             (ip.to_string(), port)
         }
         0x03 => {
-            // Domain name
             let mut len_buf = [0u8; 1];
             stream.read_exact(&mut len_buf).await?;
             let domain_len = len_buf[0] as usize;
@@ -59,7 +57,6 @@ pub async fn handle_socks5_client(
             (domain, port)
         }
         0x04 => {
-            // IPv6
             let mut ip_buf = [0u8; 16];
             stream.read_exact(&mut ip_buf).await?;
             let mut port_buf = [0u8; 2];
@@ -79,6 +76,7 @@ pub async fn handle_socks5_client(
     let remote_stream = match TcpStream::connect(&remote_target).await {
         Ok(s) => s,
         Err(e) => {
+            eprintln!("[SOCKS5] ❌ Remote connect failed for {remote_target}: {e}");
             stream.write_all(&[0x05, 0x04, 0x00, 0x01, 0, 0, 0, 0, 0, 0]).await?;
             return Err(format!("Could not connect to {}: {}", remote_target, e).into());
         }
