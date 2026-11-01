@@ -16,6 +16,8 @@ pub struct DesyncConfig {
     pub mode: DesyncMode,
     pub split_offset: usize, // Offset inside SNI (default: 2)
     pub delay_ms: u64,       // Delay in ms between sending chunks (default: 3)
+    pub fake_sni: Option<String>, // Fake SNI domain (default: "yandex.ru")
+    pub fake_ttl: u32,       // Low TTL for fake packet (default: 5 hops)
     pub target_domains: Vec<String>, // Empty = desync ALL domains
 }
 
@@ -25,7 +27,8 @@ impl Default for DesyncConfig {
             mode: DesyncMode::MultiSplit,
             split_offset: 2,
             delay_ms: 3,
-            // Empty list means desync ALL connections passing through this dedicated proxy
+            fake_sni: Some("yandex.ru".to_string()),
+            fake_ttl: 5,
             target_domains: Vec::new(),
         }
     }
@@ -48,8 +51,7 @@ impl DesyncConfig {
         if let Some(sni_info) = sni {
             match self.mode {
                 DesyncMode::MultiSplit => {
-                    // Cut 1: Right inside TLS record header (byte 2).
-                    // Prevents TSPU from recognizing the record as TLS 0x16 0x03.
+                    // Cut 1: Right inside TLS record header (byte 2)
                     if data.len() > 2 {
                         cuts.push(2);
                     }
@@ -81,7 +83,6 @@ impl DesyncConfig {
                 }
             }
         } else if data.len() > 4 {
-            // Non-SNI or raw TLS: split at byte 2
             cuts.push(2);
         }
 
