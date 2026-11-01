@@ -17,9 +17,11 @@ pub enum DesyncMode {
 #[derive(Debug, Clone)]
 pub struct DesyncConfig {
     pub mode: DesyncMode,
+    #[allow(dead_code)]
     pub split_offset: usize,      // Offset inside SNI (default: 2)
     pub delay_ms: u64,            // Delay in ms between sending chunks (default: 2)
     pub fake_sni: Option<String>, // Fake SNI domain if enabled (disabled by default)
+    #[allow(dead_code)]
     pub fake_ttl: u32,            // Low TTL for fake packet (default: 5 hops)
     pub target_domains: Vec<String>, // Empty = desync ALL domains
 }
@@ -73,6 +75,7 @@ impl DesyncConfig {
     }
 
     /// Computes split indices for a given buffer.
+    #[allow(dead_code)]
     pub fn compute_split_points(&self, data: &[u8], sni: Option<&SniInfo>) -> Vec<usize> {
         let mut cuts = Vec::new();
 

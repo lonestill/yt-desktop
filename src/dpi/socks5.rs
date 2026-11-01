@@ -4,6 +4,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
 use crate::dpi::forwarder::handle_desync_tunnel;
+use crate::dpi::resolve_ipv4;
 use crate::dpi::strategy::DesyncConfig;
 
 pub async fn handle_socks5_client(
@@ -71,14 +72,23 @@ pub async fn handle_socks5_client(
         }
     };
 
-    // 3. Connect to remote host
-    let remote_target = format!("{}:{}", target_host, target_port);
-    let remote_stream = match TcpStream::connect(&remote_target).await {
+    // 3. Connect to remote host (strictly IPv4)
+    let remote_addr = match resolve_ipv4(&target_host, target_port).await {
+        Ok(addr) => addr,
+        Err(e) => {
+            eprintln!("[SOCKS5] ❌ DNS resolution failed for {target_host}:{target_port}: {e}");
+            stream.write_all(&[0x05, 0x04, 0x00, 0x01, 0, 0, 0, 0, 0, 0]).await?;
+            return Err(format!("DNS resolution failed for {target_host}: {e}").into());
+        }
+    };
+
+    println!("[SOCKS5] 🎯 Connecting to {target_host}:{target_port} -> IPv4 [{remote_addr}]");
+    let remote_stream = match TcpStream::connect(remote_addr).await {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("[SOCKS5] ❌ Remote connect failed for {remote_target}: {e}");
+            eprintln!("[SOCKS5] ❌ Remote connect failed for {remote_addr}: {e}");
             stream.write_all(&[0x05, 0x04, 0x00, 0x01, 0, 0, 0, 0, 0, 0]).await?;
-            return Err(format!("Could not connect to {}: {}", remote_target, e).into());
+            return Err(format!("Could not connect to {remote_addr}: {e}").into());
         }
     };
 

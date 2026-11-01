@@ -4,12 +4,32 @@ pub mod socks5;
 pub mod strategy;
 pub mod tls;
 
+use std::net::SocketAddr;
 use std::sync::Arc;
 use strategy::DesyncConfig;
 use tokio::net::TcpListener;
 
 pub struct DpiProxyHandle {
     pub port: u16,
+}
+
+/// Resolves a hostname strictly prioritizing IPv4.
+/// Critical for avoiding broken/dead IPv6 routes on macOS systems without IPv6 gateways.
+pub async fn resolve_ipv4(host: &str, port: u16) -> Result<SocketAddr, std::io::Error> {
+    if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+        return Ok(SocketAddr::new(ip, port));
+    }
+    let addrs = tokio::net::lookup_host(format!("{}:{}", host, port)).await?;
+    for addr in addrs {
+        if addr.is_ipv4() {
+            return Ok(addr);
+        }
+    }
+    // Fallback if no IPv4
+    tokio::net::lookup_host(format!("{}:{}", host, port))
+        .await?
+        .next()
+        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "No IP address found for host"))
 }
 
 /// Spawns the embedded anti-DPI proxy on a background Tokio runtime using an ephemeral port.

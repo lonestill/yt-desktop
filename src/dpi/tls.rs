@@ -8,6 +8,7 @@ pub struct SniInfo {
 }
 
 /// Pre-generated RFC-compliant TLS 1.3 ClientHello with SNI = "yandex.ru"
+#[allow(dead_code)]
 pub const FAKE_YANDEX_CHELLO: &[u8] = &[
     0x16, 0x03, 0x01, 0x00, 0xc1, 0x01, 0x00, 0x00, 0xbd, 0x03, 0x03, 0xce, 0xb9, 0x2e, 0x5b, 0xf6,
     0x9a, 0xd7, 0x39, 0x4c, 0xfe, 0xdd, 0x41, 0x67, 0x4c, 0x30, 0x8b, 0x10, 0x55, 0x45, 0x9d, 0x5f,
@@ -117,6 +118,7 @@ pub fn parse_client_hello_sni(data: &[u8]) -> Option<SniInfo> {
 
 /// Dynamically rewrites the SNI hostname inside a ClientHello payload to `new_sni`.
 /// Recalculates all enclosing TLS length fields (record, handshake, extension, server_name_list).
+#[allow(dead_code)]
 pub fn replace_client_hello_sni(data: &[u8], new_sni: &str) -> Option<Vec<u8>> {
     let sni = parse_client_hello_sni(data)?;
     if sni.sni_offset < 9 {
@@ -198,4 +200,47 @@ mod tests {
         assert_eq!(parsed.hostname, "google.ru");
         assert_eq!(parsed.sni_len, 9);
     }
+}
+
+/// Splits a single TLS ClientHello into multiple RFC-compliant TLS records.
+/// This is the exact `--tlsrec` technique from ByeDPI.
+/// RFC 5246/8446 allows any handshake message to be fragmented across multiple TLS records.
+/// TSPU DPI engines fail to extract the SNI because the first record contains no hostname.
+pub fn split_into_tls_records(payload: &[u8], split_points: &[usize]) -> Vec<Vec<u8>> {
+    if payload.len() < 5 || payload[0] != 0x16 {
+        return vec![payload.to_vec()];
+    }
+
+    let version = [payload[1], payload[2]];
+    let handshake_data = &payload[5..];
+
+    let mut records = Vec::new();
+    let mut prev = 0;
+
+    for &pt in split_points {
+        if pt > prev && pt < handshake_data.len() {
+            let chunk = &handshake_data[prev..pt];
+            let len = (chunk.len() as u16).to_be_bytes();
+            let mut rec = Vec::with_capacity(5 + chunk.len());
+            rec.push(0x16);
+            rec.extend_from_slice(&version);
+            rec.extend_from_slice(&len);
+            rec.extend_from_slice(chunk);
+            records.push(rec);
+            prev = pt;
+        }
+    }
+
+    if prev < handshake_data.len() {
+        let chunk = &handshake_data[prev..];
+        let len = (chunk.len() as u16).to_be_bytes();
+        let mut rec = Vec::with_capacity(5 + chunk.len());
+        rec.push(0x16);
+        rec.extend_from_slice(&version);
+        rec.extend_from_slice(&len);
+        rec.extend_from_slice(chunk);
+        records.push(rec);
+    }
+
+    records
 }

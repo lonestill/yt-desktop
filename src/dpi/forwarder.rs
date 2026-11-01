@@ -4,13 +4,13 @@ use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
-use crate::dpi::strategy::DesyncConfig;
-use crate::dpi::tls::{parse_client_hello_sni, replace_client_hello_sni, FAKE_YANDEX_CHELLO};
+use crate::dpi::strategy::{DesyncConfig, DesyncMode};
+use crate::dpi::tls::{parse_client_hello_sni, split_into_tls_records};
 
 static CONN_COUNTER: AtomicUsize = AtomicUsize::new(1);
 
 /// Handles bidirectional streaming between client and remote server,
-/// applying DPI desynchronization splitting with comprehensive diagnostic telemetry.
+/// applying RFC-compliant TLS record desynchronization with comprehensive diagnostics.
 pub async fn handle_desync_tunnel(
     mut client_stream: TcpStream,
     mut remote_stream: TcpStream,
@@ -25,7 +25,7 @@ pub async fn handle_desync_tunnel(
     let mut initial_buf = vec![0u8; 8192];
     let n = client_stream.read(&mut initial_buf).await?;
     if n == 0 {
-        println!("[CONN #{conn_id}] ⚠️ Client closed before sending data to {target_host}:{target_port}");
+        println!("[CONN #{conn_id}] ⚠️ Client closed socket before sending data");
         return Ok(());
     }
 
@@ -44,56 +44,49 @@ pub async fn handle_desync_tunnel(
 
     let is_targeted = config.is_target(&effective_host);
 
-    if is_targeted {
-        // 1. Optional Fake Packet Injection (only if explicitly enabled via DESYNC_FAKE=1)
-        if let Some(ref fake_sni) = config.fake_sni {
-            let fake_bytes = if fake_sni == "yandex.ru" {
-                FAKE_YANDEX_CHELLO.to_vec()
-            } else if let Some(rewritten) = replace_client_hello_sni(payload, fake_sni) {
-                rewritten
-            } else {
-                FAKE_YANDEX_CHELLO.to_vec()
-            };
-
-            println!(
-                "[CONN #{conn_id}] 🎭 FAKE SNI: Sending fake packet for '{}' with TTL {}",
-                fake_sni, config.fake_ttl
-            );
-
-            let _ = remote_stream.set_ttl(config.fake_ttl);
-            let _ = remote_stream.write_all(&fake_bytes).await;
-            let _ = remote_stream.flush().await;
-
-            if config.delay_ms > 0 {
-                tokio::time::sleep(Duration::from_millis(config.delay_ms)).await;
-            }
-
-            let _ = remote_stream.set_ttl(64);
-        }
-
-        // 2. Real ClientHello Segmentation
-        let cuts = config.compute_split_points(payload, sni.as_ref());
-        if !cuts.is_empty() {
-            println!(
-                "[CONN #{conn_id}] ⚡ Splitting ClientHello at cuts: {:?} (delay: {}ms)",
-                cuts, config.delay_ms
-            );
-
-            let mut prev = 0;
-            for cut in cuts {
-                if cut > prev && cut <= payload.len() {
-                    remote_stream.write_all(&payload[prev..cut]).await?;
-                    remote_stream.flush().await?;
-                    if config.delay_ms > 0 {
-                        tokio::time::sleep(Duration::from_millis(config.delay_ms)).await;
+    if is_targeted && sni.is_some() {
+        let split_pts = match config.mode {
+            DesyncMode::FirstByte => vec![1],
+            DesyncMode::MultiSplit => {
+                let mut pts = vec![1];
+                if let Some(ref s) = sni {
+                    if s.sni_offset >= 5 {
+                        let rel_sni = s.sni_offset - 5;
+                        pts.push(rel_sni + 2);
+                        pts.push(rel_sni + s.sni_len);
                     }
-                    prev = cut;
+                }
+                pts
+            }
+            DesyncMode::SniSplit => {
+                if let Some(ref s) = sni {
+                    if s.sni_offset >= 5 {
+                        vec![s.sni_offset - 5 + 2]
+                    } else {
+                        vec![1]
+                    }
+                } else {
+                    vec![1]
                 }
             }
+            DesyncMode::None => vec![],
+        };
 
-            if prev < payload.len() {
-                remote_stream.write_all(&payload[prev..]).await?;
+        if !split_pts.is_empty() {
+            let records = split_into_tls_records(payload, &split_pts);
+            println!(
+                "[CONN #{conn_id}] ⚡ Fragmenting into {} TLS records (pts: {:?}, delay: {}ms)",
+                records.len(),
+                split_pts,
+                config.delay_ms
+            );
+
+            for (i, rec) in records.iter().enumerate() {
+                remote_stream.write_all(rec).await?;
                 remote_stream.flush().await?;
+                if i + 1 < records.len() && config.delay_ms > 0 {
+                    tokio::time::sleep(Duration::from_millis(config.delay_ms)).await;
+                }
             }
         } else {
             remote_stream.write_all(payload).await?;
@@ -113,7 +106,7 @@ pub async fn handle_desync_tunnel(
             let status_str = if is_tls && hs_type == 0x02 {
                 "ServerHello (TLS OK)"
             } else if is_tls && hs_type == 0x15 {
-                "TLS Alert (Server Rejected)"
+                "TLS Alert (Rejected)"
             } else if first_resp.starts_with(b"HTTP/") {
                 "HTTP Response"
             } else {

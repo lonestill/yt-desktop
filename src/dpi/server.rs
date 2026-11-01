@@ -3,6 +3,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 
 use crate::dpi::forwarder::handle_desync_tunnel;
+use crate::dpi::resolve_ipv4;
 use crate::dpi::socks5::handle_socks5_client;
 use crate::dpi::strategy::DesyncConfig;
 
@@ -63,10 +64,20 @@ async fn handle_http_client(
             (target.to_string(), 443)
         };
 
-        let remote_target = format!("{}:{}", target_host, target_port);
-        let remote_stream = match TcpStream::connect(&remote_target).await {
+        let remote_addr = match resolve_ipv4(&target_host, target_port).await {
+            Ok(addr) => addr,
+            Err(e) => {
+                eprintln!("[HTTP] ❌ DNS resolution failed for {target_host}:{target_port}: {e}");
+                let _ = stream.write_all(b"HTTP/1.1 502 Bad Gateway\r\n\r\n").await;
+                return Err(format!("DNS failed for {target_host}: {e}").into());
+            }
+        };
+
+        println!("[HTTP] 🎯 Connecting to {target_host}:{target_port} -> IPv4 [{remote_addr}]");
+        let remote_stream = match TcpStream::connect(remote_addr).await {
             Ok(s) => s,
-            Err(_) => {
+            Err(e) => {
+                eprintln!("[HTTP] ❌ Remote connect failed for {remote_addr}: {e}");
                 let _ = stream.write_all(b"HTTP/1.1 502 Bad Gateway\r\n\r\n").await;
                 return Ok(());
             }
@@ -105,10 +116,19 @@ async fn handle_http_client(
             (target_host, 80)
         };
 
-        let remote_target = format!("{}:{}", host, port);
-        let mut remote_stream = match TcpStream::connect(&remote_target).await {
+        let remote_addr = match resolve_ipv4(&host, port).await {
+            Ok(addr) => addr,
+            Err(e) => {
+                eprintln!("[HTTP] ❌ DNS resolution failed for {host}:{port}: {e}");
+                let _ = stream.write_all(b"HTTP/1.1 502 Bad Gateway\r\n\r\n").await;
+                return Ok(());
+            }
+        };
+
+        let mut remote_stream = match TcpStream::connect(remote_addr).await {
             Ok(s) => s,
-            Err(_) => {
+            Err(e) => {
+                eprintln!("[HTTP] ❌ Remote connect failed for {remote_addr}: {e}");
                 let _ = stream.write_all(b"HTTP/1.1 502 Bad Gateway\r\n\r\n").await;
                 return Ok(());
             }
