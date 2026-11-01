@@ -3,41 +3,30 @@ use crate::dpi::tls::SniInfo;
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DesyncMode {
-    /// Split the TLS ClientHello right in the middle of the SNI domain name.
-    SniSplit,
-    /// Split right after the first few bytes of the TLS record header (e.g. 2-5 bytes).
-    HeadSplit,
-    /// Split into multiple small fragments (header + middle of SNI + post-SNI).
+    /// Multi-fragment: cut inside TLS header (byte 2) + mid-SNI + end-SNI
     MultiSplit,
+    /// Head-split: cut at byte 2 of TLS record header
+    HeadSplit,
+    /// Sni-split: cut in the middle of SNI
+    SniSplit,
 }
 
 #[derive(Debug, Clone)]
 pub struct DesyncConfig {
     pub mode: DesyncMode,
     pub split_offset: usize, // Offset inside SNI (default: 2)
-    pub delay_ms: u64,       // Micro-delay in milliseconds between packet chunks (default: 2)
-    pub target_domains: Vec<String>,
+    pub delay_ms: u64,       // Delay in ms between sending chunks (default: 3)
+    pub target_domains: Vec<String>, // Empty = desync ALL domains
 }
 
 impl Default for DesyncConfig {
     fn default() -> Self {
         Self {
-            mode: DesyncMode::SniSplit,
+            mode: DesyncMode::MultiSplit,
             split_offset: 2,
-            delay_ms: 2,
-            target_domains: vec![
-                "googlevideo.com".to_string(),
-                "youtube.com".to_string(),
-                "ytimg.com".to_string(),
-                "ggpht.com".to_string(),
-                "youtu.be".to_string(),
-                "gvt1.com".to_string(),
-                "googleapis.com".to_string(),
-                "google.com".to_string(),
-                "youtube-nocookie.com".to_string(),
-                "yt.be".to_string(),
-                "video.google.com".to_string(),
-            ],
+            delay_ms: 3,
+            // Empty list means desync ALL connections passing through this dedicated proxy
+            target_domains: Vec::new(),
         }
     }
 }
@@ -58,6 +47,31 @@ impl DesyncConfig {
 
         if let Some(sni_info) = sni {
             match self.mode {
+                DesyncMode::MultiSplit => {
+                    // Cut 1: Right inside TLS record header (byte 2).
+                    // Prevents TSPU from recognizing the record as TLS 0x16 0x03.
+                    if data.len() > 2 {
+                        cuts.push(2);
+                    }
+
+                    // Cut 2: In the middle of SNI hostname
+                    let offset = std::cmp::min(self.split_offset, sni_info.sni_len.saturating_sub(1));
+                    let cut_sni = sni_info.sni_offset + offset;
+                    if cut_sni > 2 && cut_sni < data.len() {
+                        cuts.push(cut_sni);
+                    }
+
+                    // Cut 3: End of SNI hostname
+                    let cut_end_sni = sni_info.sni_offset + sni_info.sni_len;
+                    if cut_end_sni > cut_sni && cut_end_sni < data.len() {
+                        cuts.push(cut_end_sni);
+                    }
+                }
+                DesyncMode::HeadSplit => {
+                    if data.len() > 2 {
+                        cuts.push(2);
+                    }
+                }
                 DesyncMode::SniSplit => {
                     let offset = std::cmp::min(self.split_offset, sni_info.sni_len.saturating_sub(1));
                     let cut = sni_info.sni_offset + offset;
@@ -65,33 +79,10 @@ impl DesyncConfig {
                         cuts.push(cut);
                     }
                 }
-                DesyncMode::HeadSplit => {
-                    let cut = std::cmp::min(self.split_offset.max(2), data.len().saturating_sub(1));
-                    if cut > 0 && cut < data.len() {
-                        cuts.push(cut);
-                    }
-                }
-                DesyncMode::MultiSplit => {
-                    // Cut 1: After TLS header (byte 3)
-                    if data.len() > 3 {
-                        cuts.push(3);
-                    }
-                    // Cut 2: In the middle of SNI
-                    let offset = std::cmp::min(self.split_offset, sni_info.sni_len.saturating_sub(1));
-                    let cut_sni = sni_info.sni_offset + offset;
-                    if cut_sni > 3 && cut_sni < data.len() {
-                        cuts.push(cut_sni);
-                    }
-                    // Cut 3: End of SNI
-                    let cut_end_sni = sni_info.sni_offset + sni_info.sni_len;
-                    if cut_end_sni > cut_sni && cut_end_sni < data.len() {
-                        cuts.push(cut_end_sni);
-                    }
-                }
             }
-        } else if data.len() > 5 {
-            // Generic fallback cut for unparsed packets
-            cuts.push(3);
+        } else if data.len() > 4 {
+            // Non-SNI or raw TLS: split at byte 2
+            cuts.push(2);
         }
 
         cuts.sort_unstable();

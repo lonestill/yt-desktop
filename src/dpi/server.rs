@@ -3,6 +3,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 
 use crate::dpi::forwarder::handle_desync_tunnel;
+use crate::dpi::socks5::handle_socks5_client;
 use crate::dpi::strategy::DesyncConfig;
 
 pub async fn run_embedded_proxy(
@@ -17,6 +18,13 @@ pub async fn run_embedded_proxy(
 
         let cfg = Arc::clone(&config);
         tokio::spawn(async move {
+            let mut first_byte = [0u8; 1];
+            if let Ok(n) = stream.peek(&mut first_byte).await {
+                if n > 0 && first_byte[0] == 0x05 {
+                    let _ = handle_socks5_client(stream, cfg).await;
+                    return;
+                }
+            }
             let _ = handle_http_client(stream, cfg).await;
         });
     }

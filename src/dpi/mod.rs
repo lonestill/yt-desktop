@@ -1,5 +1,6 @@
 pub mod forwarder;
 pub mod server;
+pub mod socks5;
 pub mod strategy;
 pub mod tls;
 
@@ -15,7 +16,7 @@ pub struct DpiProxyHandle {
 /// Returns the bound port for WKWebView proxy configuration.
 pub fn start_dpi_proxy() -> Result<DpiProxyHandle, Box<dyn std::error::Error + Send + Sync>> {
     let rt = tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(2)
+        .worker_threads(4)
         .enable_all()
         .build()?;
 
@@ -50,6 +51,6 @@ pub fn start_dpi_proxy() -> Result<DpiProxyHandle, Box<dyn std::error::Error + S
         .recv()?
         .map_err(|e| format!("Failed to start DPI proxy: {e}"))?;
 
-    println!("[DPI-BYPASS] ⚡ Embedded anti-DPI proxy online at 127.0.0.1:{port}");
+    println!("[DPI-BYPASS] ⚡ Embedded anti-DPI proxy online at 127.0.0.1:{port} (Hybrid SOCKS5 + HTTP CONNECT)");
     Ok(DpiProxyHandle { port })
 }

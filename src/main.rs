@@ -19,10 +19,13 @@ const INJECT_JS: &str = include_str!("inject.js");
 enum IpcMessage {
     #[serde(rename = "title")]
     Title { value: String },
+    #[serde(rename = "log")]
+    Log { level: String, message: String },
 }
 
 enum AppEvent {
     ChangeTitle(String),
+    Log { level: String, message: String },
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -126,9 +129,9 @@ fn main() {
         )
         .with_initialization_script(&init_script);
 
-    // Route traffic through embedded DPI bypass proxy
+    // Route traffic through embedded DPI bypass proxy via SOCKS5
     if let Some(ref handle) = dpi_handle {
-        webview_builder = webview_builder.with_proxy_config(ProxyConfig::Http(ProxyEndpoint {
+        webview_builder = webview_builder.with_proxy_config(ProxyConfig::Socks5(ProxyEndpoint {
             host: "127.0.0.1".to_string(),
             port: handle.port.to_string(),
         }));
@@ -141,6 +144,9 @@ fn main() {
                 match msg {
                     IpcMessage::Title { value } => {
                         let _ = proxy.send_event(AppEvent::ChangeTitle(value));
+                    }
+                    IpcMessage::Log { level, message } => {
+                        let _ = proxy.send_event(AppEvent::Log { level, message });
                     }
                 }
             }
@@ -163,6 +169,9 @@ fn main() {
                     }
                 }
                 window.set_title(&title);
+            }
+            Event::UserEvent(AppEvent::Log { level, message }) => {
+                println!("[WEBVIEW-{level}] {message}");
             }
             Event::WindowEvent {
                 event: WindowEvent::CloseRequested,

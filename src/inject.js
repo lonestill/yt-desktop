@@ -1,6 +1,90 @@
 (function () {
     'use strict';
 
+    // 0. Forward console logs and errors to native terminal
+    const _error = console.error;
+    console.error = function (...args) {
+        _error.apply(console, args);
+        try {
+            if (window.ipc) {
+                window.ipc.postMessage(JSON.stringify({
+                    type: 'log',
+                    level: 'ERROR',
+                    message: args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')
+                }));
+            }
+        } catch (_) {}
+    };
+
+    const _warn = console.warn;
+    console.warn = function (...args) {
+        _warn.apply(console, args);
+        try {
+            if (window.ipc) {
+                window.ipc.postMessage(JSON.stringify({
+                    type: 'log',
+                    level: 'WARN',
+                    message: args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')
+                }));
+            }
+        } catch (_) {}
+    };
+
+    window.addEventListener('error', (e) => {
+        try {
+            if (window.ipc) {
+                window.ipc.postMessage(JSON.stringify({
+                    type: 'log',
+                    level: 'ERROR',
+                    message: `Uncaught exception: ${e.message} at ${e.filename}:${e.lineno}`
+                }));
+            }
+        } catch (_) {}
+    });
+
+    document.addEventListener('play', (e) => {
+        if (e.target && e.target.tagName === 'VIDEO') {
+            try {
+                if (window.ipc) {
+                    window.ipc.postMessage(JSON.stringify({
+                        type: 'log',
+                        level: 'INFO',
+                        message: `Video PLAY event: readyState=${e.target.readyState}, src=${e.target.currentSrc || 'MSE'}`
+                    }));
+                }
+            } catch (_) {}
+        }
+    }, true);
+
+    document.addEventListener('error', (e) => {
+        if (e.target && e.target.tagName === 'VIDEO') {
+            try {
+                const err = e.target.error;
+                if (window.ipc) {
+                    window.ipc.postMessage(JSON.stringify({
+                        type: 'log',
+                        level: 'ERROR',
+                        message: `Video element error: code=${err ? err.code : 'unknown'}, msg=${err ? err.message : 'none'}`
+                    }));
+                }
+            } catch (_) {}
+        }
+    }, true);
+
+    document.addEventListener('waiting', (e) => {
+        if (e.target && e.target.tagName === 'VIDEO') {
+            try {
+                if (window.ipc) {
+                    window.ipc.postMessage(JSON.stringify({
+                        type: 'log',
+                        level: 'WARN',
+                        message: `Video WAITING (buffering stall): readyState=${e.target.readyState}, currentTime=${e.target.currentTime}`
+                    }));
+                }
+            } catch (_) {}
+        }
+    }, true);
+
     // 1. Inject Styles
     function injectStyles() {
         if (document.getElementById('yt-desktop-styles')) return;
