@@ -455,10 +455,21 @@
     <div class="toast" id="toast">Настройки сохранены</div>
 
     <script>
-        let currentConfig = null;
-        let dpiStatus = null;
+        let currentConfig = window.__INITIAL_CONFIG__ || {
+            selected_strategy: 'auto',
+            active_strategy: 'rostelecom',
+            block_ads: true,
+            block_shorts: true,
+            auto_confirm_watching: true,
+            enable_pip: true
+        };
+        let dpiStatus = window.__INITIAL_DPI_STATUS__ || null;
         let benchResults = {};
         let isBenchmarking = false;
+
+        if (dpiStatus) {
+            updateUiFromState();
+        }
 
         // Tabs
         document.querySelectorAll('.nav-item').forEach(el => {

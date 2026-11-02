@@ -63,6 +63,15 @@ impl AppMenu {
         dpi_menu.append(&tlsrec_item)?;
         dpi_menu.append(&direct_item)?;
 
+        dpi_menu.append(&PredefinedMenuItem::separator())?;
+        let dpi_prefs_item = MenuItem::with_id(
+            "app.preferences",
+            "⚙️ Параметры и Настройки...",
+            true,
+            Some(Accelerator::new(Modifiers::META, Code::Comma)),
+        );
+        dpi_menu.append(&dpi_prefs_item)?;
+
         // 3. Edit Menu (Правка - for input Copy/Paste/Undo)
         let edit_menu = Submenu::new("Правка", true);
         edit_menu.append(&PredefinedMenuItem::undo(Some("Отменить")))?;

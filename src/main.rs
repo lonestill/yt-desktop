@@ -253,11 +253,28 @@ fn main() {
                 println!("[WEBVIEW-{level}] {message}");
             }
             Event::UserEvent(AppEvent::OpenSettings) => {
+                let cfg = config_clone.lock().unwrap();
+                let status = dpi_clone.get_status_data(&cfg);
+                let cfg_json = serde_json::to_value(&*cfg).unwrap_or_default();
+
                 if settings_state.is_none() {
+                    let (pos_x, pos_y) = if let Ok(main_pos) = main_window.outer_position() {
+                        let scale = main_window.scale_factor();
+                        let logical_pos = main_pos.to_logical::<f64>(scale);
+                        let size = main_window.inner_size().to_logical::<f64>(scale);
+                        (
+                            (logical_pos.x + (size.width - 660.0) / 2.0).max(50.0),
+                            (logical_pos.y + (size.height - 480.0) / 2.0).max(50.0),
+                        )
+                    } else {
+                        (150.0, 150.0)
+                    };
+
                     let win = WindowBuilder::new()
                         .with_title("Настройки YouTube")
                         .with_theme(Some(Theme::Dark))
                         .with_inner_size(LogicalSize::new(660.0, 480.0))
+                        .with_position(LogicalPosition::new(pos_x, pos_y))
                         .with_resizable(false)
                         .build(event_target)
                         .expect("Failed to create settings window");
@@ -266,9 +283,18 @@ fn main() {
                     let s_dpi = Arc::clone(&dpi_clone);
                     let s_cfg = Arc::clone(&config_clone);
 
+                    let init_js = format!(
+                        r#"
+                        window.__INITIAL_CONFIG__ = {};
+                        window.__INITIAL_DPI_STATUS__ = {};
+                        "#,
+                        cfg_json, status
+                    );
+
                     let view = WebViewBuilder::new()
                         .with_autoplay(false)
                         .with_devtools(true)
+                        .with_initialization_script(&init_js)
                         .with_html(SETTINGS_HTML)
                         .with_ipc_handler(move |req| {
                             let body = req.body();
@@ -335,15 +361,12 @@ fn main() {
                         .build(&win)
                         .expect("Failed to initialize Settings webview");
 
-                    settings_state = Some((win, view));
-                }
-
-                if let Some((ref win, ref view)) = settings_state {
                     win.set_visible(true);
                     win.set_focus();
-                    let cfg = config_clone.lock().unwrap();
-                    let status = dpi_clone.get_status_data(&cfg);
-                    let cfg_json = serde_json::to_value(&*cfg).unwrap_or_default();
+                    settings_state = Some((win, view));
+                } else if let Some((ref win, ref view)) = settings_state {
+                    win.set_visible(true);
+                    win.set_focus();
                     let js = format!("if (window.__onConfigLoaded) window.__onConfigLoaded({}, {});", cfg_json, status);
                     let _ = view.evaluate_script(&js);
                 }
