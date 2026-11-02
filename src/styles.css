@@ -77,12 +77,18 @@ html.yt-hide-shorts yt-chip-cloud-chip-renderer:has(yt-formatted-string[title="S
 }
 
 /* 5. Return YouTube Dislike Button Styling */
+dislike-button-view-model,
+#segmented-dislike-button {
+    display: inline-flex !important;
+}
+
 dislike-button-view-model button,
 #segmented-dislike-button button,
 ytd-segmented-like-dislike-button-renderer button:last-child,
 .yt-spec-button-shape-next--segmented-end {
     width: auto !important;
     min-width: 52px !important;
+    padding-left: 8px !important;
     padding-right: 12px !important;
     overflow: visible !important;
 }
@@ -120,10 +126,10 @@ ytd-segmented-like-dislike-button-renderer button:last-child,
     bottom: 0 !important;
     height: 100% !important;
     background: #00d66c !important;
-    opacity: 0.85 !important;
-    z-index: 40 !important;
+    opacity: 0.9 !important;
+    z-index: 50 !important;
     pointer-events: none !important;
-    border-radius: 2px !important;
+    border-radius: 1px !important;
 }
 .yt-sb-segment.selfpromo {
     background: #ffec3d !important;
@@ -138,10 +144,10 @@ ytd-segmented-like-dislike-button-renderer button:last-child,
 /* SponsorBlock Toast Notice in player */
 .yt-sb-toast {
     position: absolute !important;
-    bottom: 64px !important;
+    bottom: 68px !important;
     left: 24px !important;
-    background: rgba(18, 18, 18, 0.92) !important;
-    border: 1px solid rgba(255, 255, 255, 0.18) !important;
+    background: rgba(18, 18, 18, 0.95) !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
     color: #fff !important;
     padding: 8px 14px !important;
     border-radius: 8px !important;
@@ -151,9 +157,9 @@ ytd-segmented-like-dislike-button-renderer button:last-child,
     display: flex !important;
     align-items: center !important;
     gap: 8px !important;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.6) !important;
-    backdrop-filter: blur(10px) !important;
-    -webkit-backdrop-filter: blur(10px) !important;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.7) !important;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
     animation: yt-sb-fade 0.2s ease !important;
 }
 

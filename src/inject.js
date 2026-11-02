@@ -1,19 +1,30 @@
 (function () {
     'use strict';
 
-    // 0. Forward console logs and errors to native terminal
+    function postIpc(obj) {
+        try {
+            const raw = JSON.stringify(obj);
+            if (window.ipc && typeof window.ipc.postMessage === 'function') {
+                window.ipc.postMessage(raw);
+                return true;
+            }
+            if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.ipc) {
+                window.webkit.messageHandlers.ipc.postMessage(raw);
+                return true;
+            }
+        } catch (_) {}
+        return false;
+    }
+
+    // Forward console logs to native terminal
     const _error = console.error;
     console.error = function (...args) {
         _error.apply(console, args);
-        try {
-            if (window.ipc) {
-                window.ipc.postMessage(JSON.stringify({
-                    type: 'log',
-                    level: 'ERROR',
-                    message: args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')
-                }));
-            }
-        } catch (_) {}
+        postIpc({
+            type: 'log',
+            level: 'ERROR',
+            message: args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')
+        });
     };
 
     let userConfig = {
@@ -60,21 +71,19 @@
         }
     }
 
-    // Helper: format numbers (e.g. 14200 -> 14.2K)
     function formatCount(num) {
-        if (!num && num !== 0) return '';
+        if (num === null || num === undefined) return '';
         if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
         if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
         return String(num);
     }
 
-    // Helper: extract active Video ID from URL
     function getActiveVideoId() {
         const urlParams = new URLSearchParams(window.location.search);
         return urlParams.get('v');
     }
 
-    // 2. Shorts Auto-Redirect to normal video player
+    // 2. Shorts Auto-Redirect
     function checkShortsRedirect() {
         if (!userConfig.block_shorts) return;
         const path = window.location.pathname;
@@ -161,49 +170,46 @@
         }
     }
 
-    // 5. Metadata Cache & Communication with Rust
-    let activeVideoId = null;
+    // 5. Metadata Sync with Native Rust Backend
+    let requestedVideoId = null;
     let videoMetaCache = {};
     let lastSkippedUuid = null;
 
-    function requestVideoMetaIfNeeded() {
+    function syncVideoMeta() {
         const videoId = getActiveVideoId();
         if (!videoId) return;
 
-        if (videoId !== activeVideoId) {
-            activeVideoId = videoId;
-            lastSkippedUuid = null;
-
-            // Trigger fetch in Rust backend if not cached
-            if (!videoMetaCache[videoId] && window.ipc) {
-                window.ipc.postMessage(JSON.stringify({
-                    type: 'fetch_video_meta',
-                    video_id: videoId
-                }));
+        if (videoId !== requestedVideoId && !videoMetaCache[videoId]) {
+            const ok = postIpc({
+                type: 'fetch_video_meta',
+                video_id: videoId
+            });
+            if (ok) {
+                requestedVideoId = videoId;
             }
         }
     }
 
-    // Rust delivers fetched metadata here
     window.__onVideoMeta = function(videoId, dislikesData, sponsorSegments) {
         videoMetaCache[videoId] = {
             dislikes: dislikesData,
             segments: sponsorSegments || []
         };
-        applyDislikes(videoId);
-        renderSponsorSegments(videoId);
+        applyDislikes();
+        renderSponsorSegments();
     };
 
     // 6. Return YouTube Dislike DOM Injection
-    function applyDislikes(targetVideoId) {
+    function applyDislikes() {
         if (!userConfig.return_dislikes) return;
-        const meta = videoMetaCache[targetVideoId || activeVideoId];
+        const videoId = getActiveVideoId();
+        const meta = videoMetaCache[videoId];
         if (!meta || !meta.dislikes) return;
 
         const dislikes = meta.dislikes.dislikes;
         const likes = meta.dislikes.likes;
 
-        // Try multiple selectors across YouTube layout variations
+        // Find dislike button in multiple possible containers
         const dislikeBtn = document.querySelector('dislike-button-view-model button') ||
             document.querySelector('#segmented-dislike-button button') ||
             document.querySelector('ytd-segmented-like-dislike-button-renderer button:last-child') ||
@@ -216,7 +222,11 @@
                 label.className = 'yt-ryd-label';
                 dislikeBtn.appendChild(label);
             }
-            label.textContent = formatCount(dislikes);
+            const countText = formatCount(dislikes);
+            if (label.textContent !== countText) {
+                label.textContent = countText;
+            }
+            dislikeBtn.classList.remove('yt-spec-button-shape-next--icon-only');
         }
 
         // Like/Dislike Ratio Bar
@@ -260,7 +270,8 @@
 
     function checkSponsorSkip() {
         if (!userConfig.sponsor_block) return;
-        const meta = videoMetaCache[activeVideoId];
+        const videoId = getActiveVideoId();
+        const meta = videoMetaCache[videoId];
         if (!meta || !meta.segments || !meta.segments.length) return;
 
         const video = document.querySelector('video');
@@ -280,14 +291,19 @@
         }
     }
 
-    function renderSponsorSegments(targetVideoId) {
-        const meta = videoMetaCache[targetVideoId || activeVideoId];
-        if (!meta || !meta.segments) return;
+    function renderSponsorSegments() {
+        const videoId = getActiveVideoId();
+        const meta = videoMetaCache[videoId];
+        if (!meta || !meta.segments || !meta.segments.length) return;
 
-        document.querySelectorAll('.yt-sb-segment').forEach(el => el.remove());
-        const progressBar = document.querySelector('.ytp-progress-bar');
+        const progressBar = document.querySelector('.ytp-progress-bar') || document.querySelector('.ytp-progress-list');
         const video = document.querySelector('video');
-        if (!progressBar || !video || !video.duration || !meta.segments.length) return;
+        if (!progressBar || !video || !video.duration || video.duration <= 0) return;
+
+        const existingCount = progressBar.querySelectorAll('.yt-sb-segment').length;
+        if (existingCount === meta.segments.length) return; // already rendered
+
+        progressBar.querySelectorAll('.yt-sb-segment').forEach(el => el.remove());
 
         const duration = video.duration;
         for (const seg of meta.segments) {
@@ -373,11 +389,7 @@
         const title = document.title;
         if (title && title !== lastReportedTitle) {
             lastReportedTitle = title;
-            if (window.ipc) {
-                try {
-                    window.ipc.postMessage(JSON.stringify({ type: 'title', value: title }));
-                } catch (_) {}
-            }
+            postIpc({ type: 'title', value: title });
         }
     }
 
@@ -385,9 +397,7 @@
     window.addEventListener('keydown', (e) => {
         if (e.metaKey && e.key === ',') {
             e.preventDefault();
-            if (window.ipc) {
-                window.ipc.postMessage(JSON.stringify({ type: 'open_settings' }));
-            }
+            postIpc({ type: 'open_settings' });
             return;
         }
         if (e.metaKey && e.shiftKey && e.key.toLowerCase() === 'p') {
@@ -412,6 +422,11 @@
         }
     });
 
+    // SPA Navigation Listener
+    window.addEventListener('yt-navigate-finish', () => {
+        syncVideoMeta();
+    });
+
     // 13. Main Loop & Observers
     function tick() {
         injectStyles();
@@ -423,16 +438,14 @@
         syncTitle();
         enforceMaxQuality();
 
-        requestVideoMetaIfNeeded();
-        if (activeVideoId) {
-            applyDislikes(activeVideoId);
-            renderSponsorSegments(activeVideoId);
-            checkSponsorSkip();
-        }
+        syncVideoMeta();
+        applyDislikes();
+        renderSponsorSegments();
+        checkSponsorSkip();
     }
 
     tick();
-    setInterval(tick, 200);
+    setInterval(tick, 150);
 
     const observer = new MutationObserver(() => tick());
     if (document.body) {
@@ -446,5 +459,5 @@
         });
     }
 
-    console.log('[yt-desktop] SponsorBlock, ReturnDislike & Clean layout active.');
+    console.log('[yt-desktop] High-speed extensions engine initialized.');
 })();
