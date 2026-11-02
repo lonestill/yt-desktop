@@ -10,11 +10,15 @@ pub struct AppConfig {
     pub custom_tpws_args: String,
     pub last_latency_ms: Option<u64>,
 
-    // Content Settings
+    // Content & Extension Settings
     pub block_ads: bool,
+    pub sponsor_block: bool,
+    pub return_dislikes: bool,
     pub block_shorts: bool,
     pub auto_confirm_watching: bool,
     pub enable_pip: bool,
+    pub oled_black: bool,
+    pub max_quality: bool,
 }
 
 impl Default for AppConfig {
@@ -25,9 +29,13 @@ impl Default for AppConfig {
             custom_tpws_args: "".to_string(),
             last_latency_ms: None,
             block_ads: true,
+            sponsor_block: true,
+            return_dislikes: true,
             block_shorts: true,
             auto_confirm_watching: true,
             enable_pip: true,
+            oled_black: false,
+            max_quality: true,
         }
     }
 }

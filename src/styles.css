@@ -76,7 +76,79 @@ html.yt-hide-shorts yt-chip-cloud-chip-renderer:has(yt-formatted-string[title="S
     display: none !important;
 }
 
-/* 5. Clean up dark mode background */
+/* 5. SponsorBlock Segment Markers on progress bar */
+.yt-sb-segment {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    height: 100%;
+    background: #00d66c;
+    opacity: 0.8;
+    z-index: 35;
+    pointer-events: none;
+    border-radius: 2px;
+}
+.yt-sb-segment.selfpromo {
+    background: #ffec3d;
+}
+.yt-sb-segment.interaction {
+    background: #d46b08;
+}
+
+/* SponsorBlock Toast Notice in player */
+.yt-sb-toast {
+    position: absolute;
+    bottom: 64px;
+    left: 24px;
+    background: rgba(18, 18, 18, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #fff;
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.6);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    animation: yt-sb-fade 0.2s ease;
+}
+
+@keyframes yt-sb-fade {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* 6. Return YouTube Dislike Ratio Bar */
+.yt-ryd-ratio-bar {
+    width: 100%;
+    height: 3px;
+    background: #e50914;
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: 4px;
+    display: flex;
+}
+.yt-ryd-likes-fill {
+    height: 100%;
+    background: #3ea6ff;
+    transition: width 0.3s ease;
+}
+
+/* 7. OLED Pure Black Theme */
+html.yt-oled-black,
+html.yt-oled-black [dark],
+html.yt-oled-black body,
+html.yt-oled-black #background,
+html.yt-oled-black ytd-app {
+    --yt-spec-base-background: #000000 !important;
+    background-color: #000000 !important;
+}
+
+/* 8. Clean dark mode background default */
 html[dark], [dark] {
     --yt-spec-base-background: #0f0f0f !important;
 }

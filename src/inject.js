@@ -16,25 +16,15 @@
         } catch (_) {}
     };
 
-    const _warn = console.warn;
-    console.warn = function (...args) {
-        _warn.apply(console, args);
-        try {
-            if (window.ipc) {
-                window.ipc.postMessage(JSON.stringify({
-                    type: 'log',
-                    level: 'WARN',
-                    message: args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')
-                }));
-            }
-        } catch (_) {}
-    };
-
     let userConfig = {
         block_ads: true,
+        sponsor_block: true,
+        return_dislikes: true,
         block_shorts: true,
         auto_confirm_watching: true,
-        enable_pip: true
+        enable_pip: true,
+        oled_black: false,
+        max_quality: true
     };
 
     window.__applyConfig = function(cfg) {
@@ -43,6 +33,11 @@
             document.documentElement.classList.add('yt-hide-shorts');
         } else {
             document.documentElement.classList.remove('yt-hide-shorts');
+        }
+        if (userConfig.oled_black) {
+            document.documentElement.classList.add('yt-oled-black');
+        } else {
+            document.documentElement.classList.remove('yt-oled-black');
         }
     };
 
@@ -60,6 +55,22 @@
         if (userConfig.block_shorts) {
             document.documentElement.classList.add('yt-hide-shorts');
         }
+        if (userConfig.oled_black) {
+            document.documentElement.classList.add('yt-oled-black');
+        }
+    }
+
+    // Helper: format numbers (e.g. 14200 -> 14.2K)
+    function formatCount(num) {
+        if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+        if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+        return String(num);
+    }
+
+    // Helper: extract active Video ID
+    function getActiveVideoId() {
+        const urlParams = new URLSearchParams(window.location.search);
+        return urlParams.get('v');
     }
 
     // 2. Shorts Auto-Redirect to normal video player
@@ -149,7 +160,154 @@
         }
     }
 
-    // 5. Auto-Confirm "Still Watching?"
+    // 5. SponsorBlock Engine
+    let currentSponsorVideoId = null;
+    let currentSponsorSegments = [];
+    let lastSkippedSegmentId = null;
+
+    async function loadSponsorSegments(videoId) {
+        if (currentSponsorVideoId === videoId) return;
+        currentSponsorVideoId = videoId;
+        currentSponsorSegments = [];
+        lastSkippedSegmentId = null;
+
+        if (!userConfig.sponsor_block || !videoId) return;
+
+        try {
+            const res = await fetch(`https://sponsor.ajay.app/api/skipSegments?videoID=${videoId}&categories=["sponsor","selfpromo","interaction","intro","outro"]`);
+            if (res.ok) {
+                const data = await res.json();
+                currentSponsorSegments = data;
+                renderSponsorSegmentsOnBar();
+            }
+        } catch (_) {}
+    }
+
+    function showSponsorToast(category) {
+        let toast = document.getElementById('yt-sb-toast');
+        if (!toast) {
+            toast = document.createElement('div');
+            toast.id = 'yt-sb-toast';
+            toast.className = 'yt-sb-toast';
+            const player = document.getElementById('movie_player') || document.body;
+            player.appendChild(toast);
+        }
+        const labelMap = {
+            sponsor: 'Спонсорская интеграция',
+            selfpromo: 'Самореклама / подписка',
+            interaction: 'Просьба лайка / подписки',
+            intro: 'Интро / заставка',
+            outro: 'Аутро'
+        };
+        toast.innerHTML = `⏩ Пропущено: <b>${labelMap[category] || category}</b>`;
+        toast.style.display = 'flex';
+        clearTimeout(toast._timer);
+        toast._timer = setTimeout(() => { toast.style.display = 'none'; }, 2500);
+    }
+
+    function checkSponsorSkip() {
+        if (!userConfig.sponsor_block || currentSponsorSegments.length === 0) return;
+        const video = document.querySelector('video');
+        if (!video || video.paused) return;
+
+        const time = video.currentTime;
+        for (const seg of currentSponsorSegments) {
+            const [start, end] = seg.segment;
+            if (time >= start && time < (end - 0.2)) {
+                if (lastSkippedSegmentId !== seg.UUID) {
+                    lastSkippedSegmentId = seg.UUID;
+                    video.currentTime = end;
+                    showSponsorToast(seg.category);
+                    break;
+                }
+            }
+        }
+    }
+
+    function renderSponsorSegmentsOnBar() {
+        document.querySelectorAll('.yt-sb-segment').forEach(el => el.remove());
+        const progressBar = document.querySelector('.ytp-progress-bar');
+        const video = document.querySelector('video');
+        if (!progressBar || !video || !video.duration || currentSponsorSegments.length === 0) return;
+
+        const duration = video.duration;
+        for (const seg of currentSponsorSegments) {
+            const [start, end] = seg.segment;
+            const leftPct = (start / duration) * 100;
+            const widthPct = ((end - start) / duration) * 100;
+
+            const marker = document.createElement('div');
+            marker.className = `yt-sb-segment ${seg.category}`;
+            marker.style.left = `${leftPct}%`;
+            marker.style.width = `${widthPct}%`;
+            progressBar.appendChild(marker);
+        }
+    }
+
+    // 6. Return YouTube Dislike Engine
+    let currentDislikeVideoId = null;
+
+    async function loadDislikes(videoId) {
+        if (currentDislikeVideoId === videoId || !userConfig.return_dislikes || !videoId) return;
+        currentDislikeVideoId = videoId;
+
+        try {
+            const res = await fetch(`https://returnyoutubedislikeapi.com/votes?videoId=${videoId}`);
+            if (res.ok) {
+                const data = await res.json();
+                renderDislikes(data);
+            }
+        } catch (_) {}
+    }
+
+    function renderDislikes(data) {
+        if (!data || !userConfig.return_dislikes) return;
+
+        const dislikeBtn = document.querySelector('dislike-button-view-model button') ||
+            document.querySelector('#segmented-dislike-button button') ||
+            document.querySelector('.yt-spec-button-shape-next--segmented-end');
+
+        if (dislikeBtn) {
+            let labelSpan = dislikeBtn.querySelector('.yt-ryd-label');
+            if (!labelSpan) {
+                labelSpan = document.createElement('span');
+                labelSpan.className = 'yt-ryd-label';
+                labelSpan.style.marginLeft = '6px';
+                labelSpan.style.fontSize = '12px';
+                dislikeBtn.appendChild(labelSpan);
+            }
+            labelSpan.textContent = formatCount(data.dislikes);
+        }
+
+        // Like / Dislike ratio bar
+        const buttonGroup = document.querySelector('ytd-segmented-like-dislike-button-renderer') ||
+            document.querySelector('like-button-view-model')?.parentElement;
+
+        if (buttonGroup && !document.getElementById('yt-ryd-ratio-bar')) {
+            const total = (data.likes || 0) + (data.dislikes || 0);
+            const likePct = total > 0 ? ((data.likes / total) * 100).toFixed(1) : 100;
+
+            const bar = document.createElement('div');
+            bar.id = 'yt-ryd-ratio-bar';
+            bar.className = 'yt-ryd-ratio-bar';
+            bar.innerHTML = `<div class="yt-ryd-likes-fill" style="width: ${likePct}%;"></div>`;
+            buttonGroup.appendChild(bar);
+        }
+    }
+
+    // 7. Max Quality Enforcer
+    function enforceMaxQuality() {
+        if (!userConfig.max_quality) return;
+        const player = document.getElementById('movie_player');
+        if (player && typeof player.getPlaybackQuality === 'function' && typeof player.setPlaybackQualityRange === 'function') {
+            const current = player.getPlaybackQuality();
+            if (current && (current === 'tiny' || current === 'small' || current === 'medium' || current === 'large')) {
+                player.setPlaybackQualityRange('highres');
+            }
+        }
+    }
+
+    // 8. Auto-Confirm "Still Watching?"
     function handleStillWatching() {
         if (!userConfig.auto_confirm_watching) return;
         const confirmBtn = document.querySelector('yt-confirm-dialog-renderer #confirm-button button') ||
@@ -159,7 +317,7 @@
         }
     }
 
-    // 6. Picture-in-Picture
+    // 9. Picture-in-Picture
     async function togglePiP() {
         if (!userConfig.enable_pip) return;
         const video = document.querySelector('video');
@@ -171,14 +329,11 @@
             } else {
                 await video.requestPictureInPicture();
             }
-        } catch (err) {
-            console.warn('[yt-desktop] PiP error:', err);
-        }
+        } catch (_) {}
     }
 
     function injectPiPButton() {
-        if (!userConfig.enable_pip) return;
-        if (document.getElementById('yt-desktop-pip-btn')) return;
+        if (!userConfig.enable_pip || document.getElementById('yt-desktop-pip-btn')) return;
         const rightControls = document.querySelector('.ytp-right-controls');
         if (!rightControls) return;
 
@@ -204,7 +359,7 @@
         }
     }
 
-    // 7. Title Sync
+    // 10. Title Sync
     let lastReportedTitle = '';
     function syncTitle() {
         const title = document.title;
@@ -218,9 +373,8 @@
         }
     }
 
-    // 8. Global In-App Keyboard Shortcuts
+    // 11. Global Keyboard Shortcuts
     window.addEventListener('keydown', (e) => {
-        // Cmd + , : Open Preferences / Settings
         if (e.metaKey && e.key === ',') {
             e.preventDefault();
             if (window.ipc) {
@@ -228,25 +382,21 @@
             }
             return;
         }
-        // Cmd + Shift + P: Toggle PiP
         if (e.metaKey && e.shiftKey && e.key.toLowerCase() === 'p') {
             e.preventDefault();
             togglePiP();
             return;
         }
-        // Cmd + [ : History Back
         if (e.metaKey && e.key === '[') {
             e.preventDefault();
             window.history.back();
             return;
         }
-        // Cmd + ] : History Forward
         if (e.metaKey && e.key === ']') {
             e.preventDefault();
             window.history.forward();
             return;
         }
-        // Cmd + R : Reload
         if (e.metaKey && e.key.toLowerCase() === 'r') {
             e.preventDefault();
             window.location.reload();
@@ -254,7 +404,7 @@
         }
     });
 
-    // 9. Main Loop & Observers
+    // 12. Main Loop & Observers
     function tick() {
         injectStyles();
         checkShortsRedirect();
@@ -263,10 +413,18 @@
         handleStillWatching();
         injectPiPButton();
         syncTitle();
+        enforceMaxQuality();
+
+        const videoId = getActiveVideoId();
+        if (videoId) {
+            loadSponsorSegments(videoId);
+            loadDislikes(videoId);
+            checkSponsorSkip();
+        }
     }
 
     tick();
-    setInterval(tick, 200);
+    setInterval(tick, 250);
 
     const observer = new MutationObserver(() => tick());
     if (document.body) {
@@ -280,5 +438,5 @@
         });
     }
 
-    console.log('[yt-desktop] Clean production runtime active.');
+    console.log('[yt-desktop] SponsorBlock, ReturnDislike & Clean layout active.');
 })();

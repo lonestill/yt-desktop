@@ -368,14 +368,36 @@
         <!-- TAB 2: Content & AdBlock -->
         <div class="tab-pane" id="tab-content">
             <div class="section-header">
-                <div class="section-title">Фильтрация и функции плеера</div>
+                <div class="section-title">Расширения и функции плеера</div>
             </div>
 
             <div class="card-list">
                 <div class="setting-row">
                     <div class="setting-info">
-                        <div class="setting-title">Блокировка рекламы</div>
-                        <div class="setting-desc">Убирает пре-роллы, мид-роллы, баннеры и плашки спонсоров</div>
+                        <div class="setting-title">SponsorBlock</div>
+                        <div class="setting-desc">Автоматический пропуск спонсорских интеграций, самопиара и заставок через базу Ajay.app</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="toggle-sponsor-block">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div class="setting-row">
+                    <div class="setting-info">
+                        <div class="setting-title">Return YouTube Dislike</div>
+                        <div class="setting-desc">Возвращает реальный счётчик дизлайков и шкалу соотношения под плеером</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="toggle-return-dislikes">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div class="setting-row">
+                    <div class="setting-info">
+                        <div class="setting-title">Блокировка видео-рекламы</div>
+                        <div class="setting-desc">Убирает пре-роллы, мид-роллы, баннеры и рекламные плашки</div>
                     </div>
                     <label class="switch">
                         <input type="checkbox" id="toggle-block-ads">
@@ -386,10 +408,32 @@
                 <div class="setting-row">
                     <div class="setting-info">
                         <div class="setting-title">Вырезать YouTube Shorts</div>
-                        <div class="setting-desc">Полностью скрывает раздел Shorts из фида, поиска и навигации</div>
+                        <div class="setting-desc">Полностью скрывает раздел Shorts из фида, поиска и навигации, редиректит в плеер</div>
                     </div>
                     <label class="switch">
                         <input type="checkbox" id="toggle-block-shorts">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div class="setting-row">
+                    <div class="setting-info">
+                        <div class="setting-title">Принудительное максимальное качество</div>
+                        <div class="setting-desc">Фиксирует максимальное доступное разрешение (1080p / 1440p / 4K) без сброса в 480p</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="toggle-max-quality">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div class="setting-row">
+                    <div class="setting-info">
+                        <div class="setting-title">OLED Pure Black Theme</div>
+                        <div class="setting-desc">Настоящий чистый чёрный (#000000) вместо тёмно-серого фона для OLED/Mini-LED дисплеев</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="toggle-oled-black">
                         <span class="slider"></span>
                     </label>
                 </div>
@@ -563,7 +607,11 @@
 
             // Toggles
             document.getElementById('toggle-block-ads').checked = currentConfig.block_ads;
+            document.getElementById('toggle-sponsor-block').checked = currentConfig.sponsor_block;
+            document.getElementById('toggle-return-dislikes').checked = currentConfig.return_dislikes;
             document.getElementById('toggle-block-shorts').checked = currentConfig.block_shorts;
+            document.getElementById('toggle-max-quality').checked = currentConfig.max_quality;
+            document.getElementById('toggle-oled-black').checked = currentConfig.oled_black;
             document.getElementById('toggle-auto-confirm').checked = currentConfig.auto_confirm_watching;
             document.getElementById('toggle-pip').checked = currentConfig.enable_pip;
 
@@ -573,7 +621,11 @@
         function saveConfigAndNotify() {
             if (!currentConfig) return;
             currentConfig.block_ads = document.getElementById('toggle-block-ads').checked;
+            currentConfig.sponsor_block = document.getElementById('toggle-sponsor-block').checked;
+            currentConfig.return_dislikes = document.getElementById('toggle-return-dislikes').checked;
             currentConfig.block_shorts = document.getElementById('toggle-block-shorts').checked;
+            currentConfig.max_quality = document.getElementById('toggle-max-quality').checked;
+            currentConfig.oled_black = document.getElementById('toggle-oled-black').checked;
             currentConfig.auto_confirm_watching = document.getElementById('toggle-auto-confirm').checked;
             currentConfig.enable_pip = document.getElementById('toggle-pip').checked;
 
@@ -586,7 +638,16 @@
         }
 
         // Toggle handlers
-        ['toggle-block-ads', 'toggle-block-shorts', 'toggle-auto-confirm', 'toggle-pip'].forEach(id => {
+        [
+            'toggle-block-ads',
+            'toggle-sponsor-block',
+            'toggle-return-dislikes',
+            'toggle-block-shorts',
+            'toggle-max-quality',
+            'toggle-oled-black',
+            'toggle-auto-confirm',
+            'toggle-pip'
+        ].forEach(id => {
             document.getElementById(id)?.addEventListener('change', () => {
                 saveConfigAndNotify();
                 showToast('Настройки обновлены');
