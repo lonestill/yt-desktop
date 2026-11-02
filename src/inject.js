@@ -632,12 +632,12 @@
             const label = document.createElement('span');
             label.className = 'yt-pill-label';
             label.id = 'yt-pill-label';
-            label.textContent = '⚡ Anti-DPI';
+            label.textContent = 'Anti-DPI';
 
             const ping = document.createElement('span');
             ping.className = 'yt-pill-ping';
             ping.id = 'yt-pill-ping';
-            ping.textContent = '•';
+            ping.textContent = '';
 
             const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
             svg.setAttribute('class', 'yt-pill-gear');
@@ -710,21 +710,21 @@
             titleBox.className = 'yt-hud-title-box';
             const title = document.createElement('div');
             title.className = 'yt-hud-title';
-            title.textContent = 'Управление YouTube';
+            title.textContent = 'YouTube Desktop';
             const subtitle = document.createElement('div');
             subtitle.className = 'yt-hud-subtitle';
             subtitle.id = 'yt-hud-subtitle';
-            subtitle.textContent = 'Anti-DPI • en0 bypass';
+            subtitle.textContent = 'en0 · zapret bypass';
             titleBox.appendChild(title);
             titleBox.appendChild(subtitle);
 
             const benchBtn = document.createElement('button');
             benchBtn.className = 'yt-hud-bench-btn';
             benchBtn.id = 'yt-hud-bench-btn';
-            benchBtn.textContent = '⚡ Тест сети';
+            benchBtn.textContent = 'Тест сети';
             benchBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                benchBtn.textContent = '⏳ Тестирую...';
+                benchBtn.textContent = 'Тестирую...';
                 benchBtn.disabled = true;
                 const dot = document.getElementById('yt-pill-dot');
                 if (dot) dot.classList.add('busy');
@@ -739,7 +739,7 @@
             const stratSec = document.createElement('div');
             const stratLabel = document.createElement('div');
             stratLabel.className = 'yt-hud-section-label';
-            stratLabel.textContent = 'Стратегия обхода DPI';
+            stratLabel.textContent = 'Профиль обхода DPI';
             stratSec.appendChild(stratLabel);
 
             const stratGrid = document.createElement('div');
@@ -747,12 +747,12 @@
             stratGrid.id = 'yt-hud-strategies-grid';
 
             const strategies = [
-                { id: 'auto', name: '⚡ Авто-выбор', ping: '' },
-                { id: 'rostelecom', name: 'Ростелеком / Дом.ру', ping: '' },
-                { id: 'mts_megafon', name: 'МТС / Мегафон / Yota', ping: '' },
-                { id: 'beeline_mgts', name: 'Билайн / МГТС / Теле2', ping: '' },
-                { id: 'tlsrec_midsld', name: 'TLS Record (SLD)', ping: '' },
-                { id: 'direct', name: 'Прямое (без DPI)', ping: '' },
+                { id: 'auto', name: 'Автовыбор' },
+                { id: 'rostelecom', name: 'Ростелеком' },
+                { id: 'mts_megafon', name: 'МТС / Мегафон' },
+                { id: 'beeline_mgts', name: 'Билайн / Теле2' },
+                { id: 'tlsrec_midsld', name: 'TLS Record' },
+                { id: 'direct', name: 'Прямое' },
             ];
 
             for (const s of strategies) {
@@ -764,9 +764,9 @@
                 nameEl.className = 'yt-strat-name';
                 nameEl.textContent = s.name;
 
-                const pingEl = document.createElement('div');
+                const pingEl = document.createElement('span');
                 pingEl.className = 'yt-strat-ping';
-                pingEl.textContent = s.ping || 'готов';
+                pingEl.textContent = '—';
 
                 chip.appendChild(nameEl);
                 chip.appendChild(pingEl);
@@ -786,7 +786,7 @@
             const togSec = document.createElement('div');
             const togLabel = document.createElement('div');
             togLabel.className = 'yt-hud-section-label';
-            togLabel.textContent = 'Функции и расширения';
+            togLabel.textContent = 'Расширения';
             togSec.appendChild(togLabel);
 
             const togglesList = document.createElement('div');
@@ -794,33 +794,23 @@
             togglesList.id = 'yt-hud-toggles';
 
             const toggleDefs = [
-                { key: 'block_ads', icon: '🛡️', title: 'Блокировка рекламы' },
-                { key: 'sponsor_block', icon: '⏩', title: 'SponsorBlock (пропуск спонсоров)' },
-                { key: 'return_dislikes', icon: '👎', title: 'Return Dislike (счётчик дизлайков)' },
-                { key: 'block_shorts', icon: '🚫', title: 'Скрыть Shorts ленту' },
-                { key: 'max_quality', icon: '🎬', title: 'Max Quality (автомакс 4K/8K)' },
-                { key: 'oled_black', icon: '🖤', title: 'OLED Pure Black (истинный черный)' },
-                { key: 'enable_pip', icon: '🪟', title: 'Режим «Картинка в картинке»' },
-                { key: 'auto_confirm_watching', icon: '☕', title: 'Не прерывать (Still Watching)' },
+                { key: 'block_ads', title: 'Блокировка рекламы' },
+                { key: 'sponsor_block', title: 'SponsorBlock' },
+                { key: 'return_dislikes', title: 'Счётчик дизлайков' },
+                { key: 'block_shorts', title: 'Скрыть Shorts' },
+                { key: 'max_quality', title: 'Максимальное качество (4K / 8K)' },
+                { key: 'oled_black', title: 'OLED Pure Black' },
+                { key: 'enable_pip', title: 'Картинка в картинке' },
+                { key: 'auto_confirm_watching', title: 'Не прерывать воспроизведение' },
             ];
 
             for (const t of toggleDefs) {
                 const row = document.createElement('div');
                 row.className = 'yt-hud-toggle-row';
 
-                const info = document.createElement('div');
-                info.className = 'yt-toggle-info';
-                const icon = document.createElement('div');
-                icon.className = 'yt-toggle-icon';
-                icon.textContent = t.icon;
-                const textBox = document.createElement('div');
-                textBox.className = 'yt-toggle-text';
                 const titleEl = document.createElement('div');
                 titleEl.className = 'yt-toggle-title';
                 titleEl.textContent = t.title;
-                textBox.appendChild(titleEl);
-                info.appendChild(icon);
-                info.appendChild(textBox);
 
                 const switchLabel = document.createElement('label');
                 switchLabel.className = 'yt-apple-switch';
@@ -840,7 +830,7 @@
                 switchLabel.appendChild(input);
                 switchLabel.appendChild(slider);
 
-                row.appendChild(info);
+                row.appendChild(titleEl);
                 row.appendChild(switchLabel);
                 togglesList.appendChild(row);
             }
@@ -851,30 +841,44 @@
             const footer = document.createElement('div');
             footer.className = 'yt-hud-footer';
 
-            const shortcut = document.createElement('span');
-            shortcut.textContent = 'Горячая клавиша: ⌘,';
+            const shortcut = document.createElement('div');
+            shortcut.className = 'yt-hud-shortcut';
+            const kbdCmd = document.createElement('kbd');
+            kbdCmd.textContent = '⌘';
+            const kbdComma = document.createElement('kbd');
+            kbdComma.textContent = ',';
+            const shortcutLabel = document.createElement('span');
+            shortcutLabel.textContent = 'меню';
+            shortcut.appendChild(kbdCmd);
+            shortcut.appendChild(kbdComma);
+            shortcut.appendChild(shortcutLabel);
 
             const linksBox = document.createElement('div');
-            linksBox.style.cssText = 'display:flex;gap:12px;align-items:center;';
+            linksBox.className = 'yt-hud-links';
 
             const openWelcomeBtn = document.createElement('button');
-            openWelcomeBtn.className = 'yt-hud-folder-btn';
-            openWelcomeBtn.textContent = '👋 Мастер настройки';
+            openWelcomeBtn.className = 'yt-hud-link-btn';
+            openWelcomeBtn.textContent = 'Мастер сети';
             openWelcomeBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 hud.classList.remove('open');
                 window.__showHelloScreen();
             });
 
+            const sep = document.createElement('span');
+            sep.className = 'yt-hud-sep';
+            sep.textContent = '·';
+
             const openFolderBtn = document.createElement('button');
-            openFolderBtn.className = 'yt-hud-folder-btn';
-            openFolderBtn.textContent = '📁 Конфиг';
+            openFolderBtn.className = 'yt-hud-link-btn';
+            openFolderBtn.textContent = 'Конфиг';
             openFolderBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 postIpc({ type: 'open_config_folder' });
             });
 
             linksBox.appendChild(openWelcomeBtn);
+            linksBox.appendChild(sep);
             linksBox.appendChild(openFolderBtn);
 
             footer.appendChild(shortcut);
@@ -940,7 +944,7 @@
                     'auto': 'Авто',
                     'rostelecom': 'Ростелеком',
                     'mts_megafon': 'МТС / Мегафон',
-                    'beeline_mgts': 'Билайн / МГТС',
+                    'beeline_mgts': 'Билайн / Теле2',
                     'tlsrec_midsld': 'TLS Record',
                     'tlsrec_sni': 'TLS SNI',
                     'direct': 'Прямое'
@@ -953,9 +957,9 @@
                 const pillLabel = document.getElementById('yt-pill-label');
                 if (pillLabel) {
                     if (selectedId === 'auto') {
-                        pillLabel.textContent = `⚡ Авто (${activeName})`;
+                        pillLabel.textContent = `Авто · ${activeName}`;
                     } else {
-                        pillLabel.textContent = `⚡ ${activeName}`;
+                        pillLabel.textContent = activeName;
                     }
                 }
 
@@ -964,7 +968,18 @@
                     if (status.last_latency_ms != null && status.last_latency_ms > 0) {
                         pillPing.textContent = `${status.last_latency_ms} ms`;
                     } else {
-                        pillPing.textContent = 'активен';
+                        pillPing.textContent = '';
+                    }
+                }
+
+                const dot = document.getElementById('yt-pill-dot');
+                if (dot) {
+                    if (selectedId === 'direct') {
+                        dot.style.background = '#71717a';
+                        dot.style.boxShadow = 'none';
+                    } else {
+                        dot.style.background = '#22c55e';
+                        dot.style.boxShadow = '0 0 6px rgba(34, 197, 94, 0.4)';
                     }
                 }
 
@@ -979,7 +994,7 @@
         try {
             const benchBtn = document.getElementById('yt-hud-bench-btn');
             if (benchBtn) {
-                benchBtn.textContent = '⚡ Тест сети';
+                benchBtn.textContent = 'Тест сети';
                 benchBtn.disabled = false;
             }
             const dot = document.getElementById('yt-pill-dot');
@@ -993,10 +1008,10 @@
                         if (pingEl) {
                             if (r.success && r.latency_ms != null) {
                                 pingEl.textContent = `${r.latency_ms} ms`;
-                                pingEl.style.color = '#4ade80';
+                                pingEl.style.color = '#34d399';
                             } else {
-                                pingEl.textContent = 'сбой';
-                                pingEl.style.color = '#ef4444';
+                                pingEl.textContent = '—';
+                                pingEl.style.color = '#52525b';
                             }
                         }
                     }

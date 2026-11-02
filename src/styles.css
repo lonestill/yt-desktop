@@ -225,32 +225,32 @@ html[dark], [dark] {
 }
 
 /* ==========================================================================
-   yt-desktop: Apple-Grade Glassmorphic Control Center HUD & Pill
+   yt-desktop: Apple-Grade Glassmorphic Control Center HUD & Pill (Zero Slop)
    ========================================================================== */
 
-/* 1. Header & Floating Pill */
+/* 1. Top Pill inside YouTube Masthead */
 #yt-desktop-pill {
     position: fixed !important;
     top: 12px !important;
     right: 280px !important;
     height: 32px !important;
-    padding: 0 12px !important;
+    padding: 0 10px !important;
     border-radius: 16px !important;
-    background: rgba(24, 24, 28, 0.78) !important;
-    backdrop-filter: blur(24px) saturate(180%) !important;
-    -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
-    border: 1px solid rgba(255, 255, 255, 0.14) !important;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05) inset !important;
+    background: rgba(24, 24, 27, 0.72) !important;
+    backdrop-filter: blur(20px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25) !important;
     display: inline-flex !important;
     align-items: center !important;
-    gap: 8px !important;
+    gap: 7px !important;
     cursor: pointer !important;
     z-index: 99999 !important;
     user-select: none !important;
     -webkit-user-select: none !important;
-    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    transition: all 0.15s ease !important;
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif !important;
-    color: #f2f2f2 !important;
+    color: #e4e4e7 !important;
 }
 
 /* Seamless integration inside YouTube top masthead */
@@ -270,56 +270,53 @@ ytd-masthead #yt-desktop-pill,
 }
 
 #yt-desktop-pill:hover {
-    background: rgba(36, 36, 42, 0.9) !important;
-    border-color: rgba(255, 255, 255, 0.28) !important;
-    transform: translateY(-1px) scale(1.02) !important;
-    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5), 0 0 12px rgba(10, 132, 255, 0.25) !important;
+    background: rgba(39, 39, 42, 0.85) !important;
+    border-color: rgba(255, 255, 255, 0.16) !important;
+    color: #ffffff !important;
 }
 
 #yt-desktop-pill:active {
-    transform: translateY(0) scale(0.98) !important;
+    transform: scale(0.98) !important;
 }
 
 .yt-pill-dot {
-    width: 7px !important;
-    height: 7px !important;
+    width: 6px !important;
+    height: 6px !important;
     border-radius: 50% !important;
-    background: #34c759 !important;
-    box-shadow: 0 0 8px #34c759 !important;
+    background: #22c55e !important;
+    box-shadow: 0 0 6px rgba(34, 197, 94, 0.4) !important;
     flex-shrink: 0 !important;
 }
 .yt-pill-dot.busy {
-    background: #ff9500 !important;
-    box-shadow: 0 0 8px #ff9500 !important;
+    background: #f59e0b !important;
+    box-shadow: 0 0 6px rgba(245, 158, 11, 0.4) !important;
     animation: ytPillPulse 0.9s infinite alternate !important;
 }
 @keyframes ytPillPulse { from { opacity: 0.4; } to { opacity: 1; } }
 
 .yt-pill-label {
-    font-size: 12px !important;
+    font-size: 11.5px !important;
     font-weight: 500 !important;
+    letter-spacing: -0.01em !important;
     white-space: nowrap !important;
 }
 
 .yt-pill-ping {
     font-size: 11px !important;
-    font-weight: 600 !important;
-    color: #4ade80 !important;
-    background: rgba(52, 199, 89, 0.15) !important;
-    padding: 1px 6px !important;
-    border-radius: 10px !important;
+    font-weight: 500 !important;
+    color: #71717a !important;
     font-variant-numeric: tabular-nums !important;
 }
 
 .yt-pill-gear {
-    width: 14px !important;
-    height: 14px !important;
-    fill: #a1a1aa !important;
-    transition: transform 0.3s ease !important;
+    width: 12px !important;
+    height: 12px !important;
+    fill: #71717a !important;
+    transition: all 0.2s ease !important;
 }
 #yt-desktop-pill:hover .yt-pill-gear {
     transform: rotate(45deg) !important;
-    fill: #ffffff !important;
+    fill: #d4d4d8 !important;
 }
 
 /* 2. Glass Control Center Popover (HUD) */
@@ -327,28 +324,28 @@ ytd-masthead #yt-desktop-pill,
     position: fixed !important;
     top: 54px !important;
     right: 84px !important;
-    width: 350px !important;
+    width: 320px !important;
     max-height: calc(100vh - 80px) !important;
     overflow-y: auto !important;
-    background: rgba(22, 22, 26, 0.88) !important;
-    backdrop-filter: blur(40px) saturate(200%) !important;
-    -webkit-backdrop-filter: blur(40px) saturate(200%) !important;
-    border: 1px solid rgba(255, 255, 255, 0.16) !important;
-    border-radius: 18px !important;
-    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.08) inset !important;
-    padding: 16px !important;
+    background: rgba(18, 18, 22, 0.94) !important;
+    backdrop-filter: blur(48px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(48px) saturate(180%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: 14px !important;
+    box-shadow: 0 20px 48px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05) inset !important;
+    padding: 14px 16px !important;
     display: flex !important;
     flex-direction: column !important;
-    gap: 14px !important;
+    gap: 12px !important;
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif !important;
     color: #ffffff !important;
     z-index: 100000 !important;
     user-select: none !important;
     -webkit-user-select: none !important;
     opacity: 0 !important;
-    transform: translateY(-8px) scale(0.96) !important;
+    transform: translateY(-6px) scale(0.97) !important;
     pointer-events: none !important;
-    transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    transition: opacity 0.18s cubic-bezier(0.16, 1, 0.3, 1), transform 0.18s cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 
 #yt-desktop-hud.open {
@@ -362,7 +359,7 @@ ytd-masthead #yt-desktop-pill,
     width: 4px !important;
 }
 #yt-desktop-hud::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.15) !important;
+    background: rgba(255, 255, 255, 0.12) !important;
     border-radius: 4px !important;
 }
 
@@ -371,50 +368,51 @@ ytd-masthead #yt-desktop-pill,
     display: flex !important;
     align-items: center !important;
     justify-content: space-between !important;
-    padding-bottom: 12px !important;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+    padding-bottom: 10px !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
 }
 
 .yt-hud-title-box {
     display: flex !important;
     flex-direction: column !important;
-    gap: 2px !important;
+    gap: 1px !important;
 }
 .yt-hud-title {
-    font-size: 14px !important;
-    font-weight: 700 !important;
-    letter-spacing: -0.2px !important;
-    color: #ffffff !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    letter-spacing: -0.01em !important;
+    color: #f4f4f5 !important;
 }
 .yt-hud-subtitle {
     font-size: 11px !important;
-    color: #a1a1aa !important;
+    color: #71717a !important;
 }
 
 .yt-hud-bench-btn {
-    background: rgba(10, 132, 255, 0.18) !important;
-    border: 1px solid rgba(10, 132, 255, 0.4) !important;
-    color: #60a5fa !important;
+    background: rgba(255, 255, 255, 0.05) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    color: #d4d4d8 !important;
     font-size: 11px !important;
-    font-weight: 600 !important;
-    padding: 5px 10px !important;
-    border-radius: 8px !important;
+    font-weight: 500 !important;
+    padding: 4px 9px !important;
+    border-radius: 6px !important;
     cursor: pointer !important;
-    transition: all 0.15s ease !important;
+    transition: all 0.12s ease !important;
 }
 .yt-hud-bench-btn:hover {
-    background: rgba(10, 132, 255, 0.3) !important;
+    background: rgba(255, 255, 255, 0.1) !important;
     color: #ffffff !important;
+    border-color: rgba(255, 255, 255, 0.2) !important;
 }
 .yt-hud-bench-btn:active {
-    transform: scale(0.96) !important;
+    transform: scale(0.97) !important;
 }
 
 /* HUD Section Title */
 .yt-hud-section-label {
     font-size: 10px !important;
-    font-weight: 700 !important;
-    letter-spacing: 0.6px !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.04em !important;
     text-transform: uppercase !important;
     color: #71717a !important;
     margin-bottom: 6px !important;
@@ -424,96 +422,94 @@ ytd-masthead #yt-desktop-pill,
 .yt-hud-strategies-grid {
     display: grid !important;
     grid-template-columns: 1fr 1fr !important;
-    gap: 6px !important;
+    gap: 5px !important;
 }
 
 .yt-strat-chip {
-    background: rgba(255, 255, 255, 0.05) !important;
-    border: 1px solid rgba(255, 255, 255, 0.08) !important;
-    border-radius: 9px !important;
-    padding: 8px 10px !important;
+    background: rgba(255, 255, 255, 0.04) !important;
+    border: 1px solid rgba(255, 255, 255, 0.06) !important;
+    border-radius: 7px !important;
+    padding: 6px 9px !important;
     display: flex !important;
-    flex-direction: column !important;
-    gap: 2px !important;
+    align-items: center !important;
+    justify-content: space-between !important;
     cursor: pointer !important;
-    transition: all 0.15s ease !important;
+    transition: all 0.12s ease !important;
 }
 
 .yt-strat-chip:hover {
-    background: rgba(255, 255, 255, 0.09) !important;
-    border-color: rgba(255, 255, 255, 0.18) !important;
+    background: rgba(255, 255, 255, 0.08) !important;
+    border-color: rgba(255, 255, 255, 0.12) !important;
 }
 
 .yt-strat-chip.active {
-    background: rgba(10, 132, 255, 0.22) !important;
-    border-color: rgba(10, 132, 255, 0.55) !important;
-    box-shadow: 0 0 14px rgba(10, 132, 255, 0.2) inset !important;
+    background: rgba(255, 255, 255, 0.12) !important;
+    border-color: rgba(255, 255, 255, 0.24) !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3) !important;
 }
 
 .yt-strat-name {
-    font-size: 12px !important;
-    font-weight: 600 !important;
-    color: #e4e4e7 !important;
+    font-size: 11.5px !important;
+    font-weight: 500 !important;
+    color: #a1a1aa !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
 }
 .yt-strat-chip.active .yt-strat-name {
     color: #ffffff !important;
+    font-weight: 600 !important;
 }
 
 .yt-strat-ping {
     font-size: 10px !important;
-    color: #71717a !important;
+    font-weight: 500 !important;
+    color: #52525b !important;
     font-variant-numeric: tabular-nums !important;
+    margin-left: 6px !important;
+    flex-shrink: 0 !important;
 }
 .yt-strat-chip.active .yt-strat-ping {
-    color: #93c5fd !important;
+    color: #34d399 !important;
 }
 
-/* HUD Toggles List */
+/* HUD Toggles List (Grouped List Style) */
 .yt-hud-toggles {
     display: flex !important;
     flex-direction: column !important;
-    gap: 4px !important;
+    background: rgba(255, 255, 255, 0.03) !important;
+    border: 1px solid rgba(255, 255, 255, 0.06) !important;
+    border-radius: 10px !important;
+    overflow: hidden !important;
 }
 
 .yt-hud-toggle-row {
     display: flex !important;
     align-items: center !important;
     justify-content: space-between !important;
-    padding: 7px 10px !important;
-    border-radius: 8px !important;
-    background: rgba(255, 255, 255, 0.03) !important;
-    transition: background 0.15s ease !important;
+    padding: 7px 12px !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04) !important;
+    transition: background 0.12s ease !important;
+}
+.yt-hud-toggle-row:last-child {
+    border-bottom: none !important;
 }
 .yt-hud-toggle-row:hover {
-    background: rgba(255, 255, 255, 0.06) !important;
+    background: rgba(255, 255, 255, 0.03) !important;
 }
 
-.yt-toggle-info {
-    display: flex !important;
-    align-items: center !important;
-    gap: 8px !important;
-}
-.yt-toggle-icon {
-    font-size: 14px !important;
-    width: 18px !important;
-    text-align: center !important;
-}
-.yt-toggle-text {
-    display: flex !important;
-    flex-direction: column !important;
-}
 .yt-toggle-title {
     font-size: 12px !important;
-    font-weight: 500 !important;
-    color: #e4e4e7 !important;
+    font-weight: 450 !important;
+    color: #d4d4d8 !important;
 }
 
-/* Modern Apple Switch */
+/* Modern Apple Switch (Standard 32x18) */
 .yt-apple-switch {
     position: relative !important;
     display: inline-block !important;
-    width: 36px !important;
-    height: 20px !important;
+    width: 32px !important;
+    height: 18px !important;
     flex-shrink: 0 !important;
 }
 .yt-apple-switch input {
@@ -525,27 +521,27 @@ ytd-masthead #yt-desktop-pill,
     position: absolute !important;
     cursor: pointer !important;
     top: 0; left: 0; right: 0; bottom: 0 !important;
-    background: rgba(255, 255, 255, 0.16) !important;
-    transition: 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
-    border-radius: 20px !important;
+    background: rgba(255, 255, 255, 0.15) !important;
+    transition: 0.18s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    border-radius: 18px !important;
 }
 .yt-apple-slider:before {
     position: absolute !important;
     content: "" !important;
-    height: 16px !important;
-    width: 16px !important;
+    height: 14px !important;
+    width: 14px !important;
     left: 2px !important;
     bottom: 2px !important;
     background: #ffffff !important;
-    transition: 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    transition: 0.18s cubic-bezier(0.16, 1, 0.3, 1) !important;
     border-radius: 50% !important;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3) !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4) !important;
 }
 .yt-apple-switch input:checked + .yt-apple-slider {
     background: #34c759 !important;
 }
 .yt-apple-switch input:checked + .yt-apple-slider:before {
-    transform: translateX(16px) !important;
+    transform: translateX(14px) !important;
 }
 
 /* HUD Footer */
@@ -554,21 +550,44 @@ ytd-masthead #yt-desktop-pill,
     align-items: center !important;
     justify-content: space-between !important;
     padding-top: 10px !important;
-    border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.06) !important;
     font-size: 11px !important;
     color: #71717a !important;
 }
-.yt-hud-folder-btn {
-    background: transparent !important;
+.yt-hud-shortcut {
+    display: flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+    color: #71717a !important;
+}
+.yt-hud-shortcut kbd {
+    background: rgba(255, 255, 255, 0.06) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: 4px !important;
+    padding: 1px 4px !important;
+    font-size: 10px !important;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif !important;
+    color: #a1a1aa !important;
+}
+.yt-hud-links {
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+}
+.yt-hud-sep {
+    color: #3f3f46 !important;
+}
+.yt-hud-link-btn {
+    background: none !important;
     border: none !important;
-    color: #3b82f6 !important;
+    padding: 0 !important;
+    color: #a1a1aa !important;
     font-size: 11px !important;
     cursor: pointer !important;
-    padding: 0 !important;
-    transition: color 0.15s ease !important;
+    transition: color 0.12s ease !important;
 }
-.yt-hud-folder-btn:hover {
-    color: #60a5fa !important;
+.yt-hud-link-btn:hover {
+    color: #f4f4f5 !important;
     text-decoration: underline !important;
 }
 
