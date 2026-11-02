@@ -16,7 +16,21 @@
         return false;
     }
 
-    // Forward logs & uncaught errors to native terminal
+    // Trusted Types bypass policy (if supported)
+    let trustedPolicy = null;
+    if (window.trustedTypes && typeof window.trustedTypes.createPolicy === 'function') {
+        try {
+            trustedPolicy = window.trustedTypes.createPolicy('default', {
+                createHTML: (s) => s,
+            });
+        } catch (_) {
+            try {
+                trustedPolicy = window.trustedTypes.createPolicy('yt-desktop-policy', {
+                    createHTML: (s) => s,
+                });
+            } catch (_) {}
+        }
+    }
     const _log = console.log;
     console.log = function (...args) {
         _log.apply(console, args);
@@ -38,6 +52,13 @@
     };
 
     window.addEventListener('error', function (e) {
+        // Suppress generic cross-origin "Script error." and YouTube's internal kevlar errors
+        if (e.message === 'Script error.' && (!e.filename || e.filename === '')) {
+            return;
+        }
+        if (e.filename && e.filename.includes('kevlar')) {
+            return;
+        }
         postIpc({
             type: 'log',
             level: 'UNCAUGHT',
@@ -243,37 +264,47 @@
     }
 
     window.__onVideoMeta = function(videoId, dislikesData, sponsorSegments) {
-        console.log('[EXT-SYNC] 📥 Received meta for ' + videoId + ': dislikes=' + (dislikesData ? dislikesData.dislikes : 'none') + ', segments=' + (sponsorSegments ? sponsorSegments.length : 0));
-        videoMetaCache[videoId] = {
-            dislikes: dislikesData,
-            segments: sponsorSegments || []
-        };
-        applyDislikes();
-        renderSponsorSegments();
+        try {
+            console.log('[EXT-SYNC] 📥 Received meta for ' + videoId + ': dislikes=' + (dislikesData ? dislikesData.dislikes : 'none') + ', segments=' + (sponsorSegments ? sponsorSegments.length : 0));
+            videoMetaCache[videoId] = {
+                dislikes: dislikesData,
+                segments: sponsorSegments || []
+            };
+            applyDislikes();
+            renderSponsorSegments();
+        } catch (err) {
+            console.error('[EXT-SYNC] ❌ Error in __onVideoMeta: ' + err.name + ': ' + err.message + ' | ' + err.stack);
+        }
     };
 
     // 6. Return YouTube Dislike DOM Injection
     function getDislikeButton() {
-        // Priority 1: Modern dislike-button-view-model
+        // 1. Direct standard class / custom element
         const vm = document.querySelector('dislike-button-view-model');
         if (vm) {
             const btn = vm.querySelector('button');
             if (btn) return btn;
         }
-        // Priority 2: segmented button
+
+        // 2. Segmented dislike button ID
         const seg = document.querySelector('#segmented-dislike-button button, segmented-like-dislike-button-view-model dislike-button-view-model button');
         if (seg) return seg;
 
-        // Priority 3: segmented-end class
+        // 3. Segmented-end class
         const segEnd = document.querySelector('.yt-spec-button-shape-next--segmented-end');
         if (segEnd) return segEnd;
 
-        // Priority 4: renderer last child
+        // 4. Renderer last child
         const renderer = document.querySelector('ytd-segmented-like-dislike-button-renderer');
         if (renderer) {
             const btns = renderer.querySelectorAll('button');
             if (btns.length >= 2) return btns[btns.length - 1];
         }
+
+        // 5. Semantic aria-label fallback (Russian & English)
+        const ariaBtn = document.querySelector('button[aria-label*="не нравится" i], button[aria-label*="dislike" i]');
+        if (ariaBtn) return ariaBtn;
+
         return null;
     }
 
@@ -288,84 +319,97 @@
             const btn = container.querySelector('button');
             if (btn) return btn;
         }
+        const ariaBtn = document.querySelector('button[aria-label*="нравится" i]:not([aria-label*="не нравится" i]), button[aria-label*="like" i]:not([aria-label*="dislike" i])');
+        if (ariaBtn) return ariaBtn;
+
         return null;
     }
 
     function applyDislikes() {
-        if (!userConfig.return_dislikes) return;
-        const videoId = getActiveVideoId();
-        if (!videoId) return;
+        try {
+            if (!userConfig.return_dislikes) return;
+            const videoId = getActiveVideoId();
+            if (!videoId) return;
 
-        const meta = videoMetaCache[videoId];
-        if (!meta || !meta.dislikes) return;
+            const meta = videoMetaCache[videoId];
+            if (!meta || !meta.dislikes) return;
 
-        const dislikes = meta.dislikes.dislikes;
-        const likes = meta.dislikes.likes;
-        if (dislikes === undefined || dislikes === null) return;
+            const dislikes = meta.dislikes.dislikes;
+            const likes = meta.dislikes.likes;
+            if (dislikes === undefined || dislikes === null) return;
 
-        const dislikeBtn = getDislikeButton();
-        if (dislikeBtn) {
-            let label = dislikeBtn.querySelector('.yt-ryd-label');
-            if (!label) {
-                const likeBtn = getLikeButton();
-                const likeText = likeBtn ? likeBtn.querySelector('.yt-spec-button-shape-next__button-text-content') : null;
+            const dislikeBtn = getDislikeButton();
+            if (dislikeBtn) {
+                let label = dislikeBtn.querySelector('.yt-ryd-label');
+                if (!label) {
+                    const likeBtn = getLikeButton();
+                    const likeText = likeBtn ? likeBtn.querySelector('.yt-spec-button-shape-next__button-text-content') : null;
 
-                if (likeText) {
-                    label = likeText.cloneNode(false);
-                    label.className = likeText.className + ' yt-ryd-label';
+                    if (likeText) {
+                        label = likeText.cloneNode(false);
+                        label.className = likeText.className + ' yt-ryd-label';
+                    } else {
+                        label = document.createElement('div');
+                        label.className = 'yt-spec-button-shape-next__button-text-content yt-ryd-label';
+                    }
+
+                    const span = document.createElement('span');
+                    span.setAttribute('role', 'text');
+                    span.textContent = formatCount(dislikes);
+                    label.replaceChildren(span);
+
+                    // Safe insertion: only use insertBefore if feedback is an IMMEDIATE child
+                    const feedback = dislikeBtn.querySelector('yt-touch-feedback-shape');
+                    if (feedback && feedback.parentNode === dislikeBtn) {
+                        dislikeBtn.insertBefore(label, feedback);
+                    } else {
+                        dislikeBtn.appendChild(label);
+                    }
+                    console.log(`[RYD-DISLIKE] ✅ Injected dislike count (${formatCount(dislikes)}) into dislike button`);
                 } else {
-                    label = document.createElement('div');
-                    label.className = 'yt-spec-button-shape-next__button-text-content yt-ryd-label';
+                    const span = label.querySelector('span');
+                    const text = formatCount(dislikes);
+                    if (span && span.textContent !== text) {
+                        span.textContent = text;
+                    } else if (!span && label.textContent !== text) {
+                        label.textContent = text;
+                    }
                 }
 
-                label.innerHTML = `<span role="text">${formatCount(dislikes)}</span>`;
-
-                const feedback = dislikeBtn.querySelector('yt-touch-feedback-shape');
-                if (feedback) {
-                    dislikeBtn.insertBefore(label, feedback);
-                } else {
-                    dislikeBtn.appendChild(label);
-                }
-            } else {
-                const span = label.querySelector('span');
-                const text = formatCount(dislikes);
-                if (span && span.textContent !== text) {
-                    span.textContent = text;
-                } else if (!span && label.textContent !== text) {
-                    label.textContent = text;
-                }
+                dislikeBtn.classList.remove('yt-spec-button-shape-next--icon-only');
+                dislikeBtn.classList.add('yt-spec-button-shape-next--icon-leading');
+                dislikeBtn.style.setProperty('width', 'auto', 'important');
+                dislikeBtn.style.setProperty('min-width', '52px', 'important');
+                dislikeBtn.style.setProperty('overflow', 'visible', 'important');
             }
 
-            dislikeBtn.classList.remove('yt-spec-button-shape-next--icon-only');
-            dislikeBtn.classList.add('yt-spec-button-shape-next--icon-leading');
-            dislikeBtn.style.setProperty('width', 'auto', 'important');
-            dislikeBtn.style.setProperty('min-width', '52px', 'important');
-            dislikeBtn.style.setProperty('overflow', 'visible', 'important');
-        }
+            // Ratio Bar under like/dislike segmented container
+            const buttonContainer = document.querySelector('segmented-like-dislike-button-view-model') ||
+                document.querySelector('ytd-segmented-like-dislike-button-renderer') ||
+                document.querySelector('like-button-view-model')?.parentElement?.parentElement;
 
-        // Ratio Bar under like/dislike segmented container
-        const buttonContainer = document.querySelector('segmented-like-dislike-button-view-model') ||
-            document.querySelector('ytd-segmented-like-dislike-button-renderer') ||
-            document.querySelector('like-button-view-model')?.parentElement?.parentElement;
+            if (buttonContainer && (likes !== undefined && dislikes !== undefined)) {
+                buttonContainer.style.position = 'relative';
+                let bar = buttonContainer.querySelector('#yt-ryd-ratio-bar');
+                if (!bar) {
+                    bar = document.createElement('div');
+                    bar.id = 'yt-ryd-ratio-bar';
+                    bar.className = 'yt-ryd-ratio-bar';
+                    buttonContainer.appendChild(bar);
+                }
 
-        if (buttonContainer && (likes !== undefined && dislikes !== undefined)) {
-            buttonContainer.style.position = 'relative';
-            let bar = buttonContainer.querySelector('#yt-ryd-ratio-bar');
-            if (!bar) {
-                bar = document.createElement('div');
-                bar.id = 'yt-ryd-ratio-bar';
-                bar.className = 'yt-ryd-ratio-bar';
-                buttonContainer.appendChild(bar);
-            }
-
-            const total = (likes || 0) + (dislikes || 0);
-            const likePct = total > 0 ? ((likes / total) * 100).toFixed(1) : 100;
-            const fill = bar.querySelector('.yt-ryd-likes-fill');
-            if (fill) {
+                const total = (likes || 0) + (dislikes || 0);
+                const likePct = total > 0 ? ((likes / total) * 100).toFixed(1) : 100;
+                let fill = bar.querySelector('.yt-ryd-likes-fill');
+                if (!fill) {
+                    fill = document.createElement('div');
+                    fill.className = 'yt-ryd-likes-fill';
+                    bar.appendChild(fill);
+                }
                 fill.style.width = `${likePct}%`;
-            } else {
-                bar.innerHTML = `<div class="yt-ryd-likes-fill" style="width: ${likePct}%;"></div>`;
             }
+        } catch (err) {
+            console.error('[RYD-DISLIKE] ❌ applyDislikes error: ' + err.name + ': ' + err.message + ' | ' + err.stack);
         }
     }
 
@@ -386,35 +430,43 @@
             intro: 'Интро / заставка',
             outro: 'Аутро'
         };
-        toast.innerHTML = `⏩ Пропущено: <b>${labelMap[category] || category}</b>`;
+        const prefix = document.createElement('span');
+        prefix.textContent = '⏩ Пропущено: ';
+        const catBold = document.createElement('b');
+        catBold.textContent = labelMap[category] || category;
+        toast.replaceChildren(prefix, catBold);
         toast.style.display = 'flex';
         clearTimeout(toast._timer);
         toast._timer = setTimeout(() => { toast.style.display = 'none'; }, 2200);
     }
 
     function checkSponsorSkip() {
-        if (!userConfig.sponsor_block) return;
-        const videoId = getActiveVideoId();
-        if (!videoId) return;
+        try {
+            if (!userConfig.sponsor_block) return;
+            const videoId = getActiveVideoId();
+            if (!videoId) return;
 
-        const meta = videoMetaCache[videoId];
-        if (!meta || !meta.segments || !meta.segments.length) return;
+            const meta = videoMetaCache[videoId];
+            if (!meta || !meta.segments || !meta.segments.length) return;
 
-        const video = document.querySelector('video');
-        if (!video || video.paused) return;
+            const video = document.querySelector('video');
+            if (!video || video.paused) return;
 
-        const ct = video.currentTime;
-        for (const seg of meta.segments) {
-            const [start, end] = seg.segment;
-            if (ct >= start && ct < (end - 0.2)) {
-                if (lastSkippedUuid !== seg.UUID) {
-                    lastSkippedUuid = seg.UUID;
-                    video.currentTime = end;
-                    showSponsorToast(seg.category);
-                    console.log(`[SPONSOR-BLOCK] ⏩ Auto-skipped ${seg.category} (${start.toFixed(1)}s -> ${end.toFixed(1)}s)`);
-                    break;
+            const ct = video.currentTime;
+            for (const seg of meta.segments) {
+                const [start, end] = seg.segment;
+                if (ct >= start && ct < (end - 0.2)) {
+                    if (lastSkippedUuid !== seg.UUID) {
+                        lastSkippedUuid = seg.UUID;
+                        video.currentTime = end;
+                        showSponsorToast(seg.category);
+                        console.log(`[SPONSOR-BLOCK] ⏩ Auto-skipped ${seg.category} (${start.toFixed(1)}s -> ${end.toFixed(1)}s)`);
+                        break;
+                    }
                 }
             }
+        } catch (err) {
+            console.error('[SPONSOR-BLOCK] ❌ checkSponsorSkip error: ' + (err.stack || err.message || String(err)));
         }
     }
 
@@ -426,44 +478,49 @@
     }
 
     function renderSponsorSegments() {
-        if (!userConfig.sponsor_block) return;
-        const videoId = getActiveVideoId();
-        if (!videoId) return;
+        try {
+            if (!userConfig.sponsor_block) return;
+            const videoId = getActiveVideoId();
+            if (!videoId) return;
 
-        const meta = videoMetaCache[videoId];
-        if (!meta || !meta.segments || !meta.segments.length) return;
+            const meta = videoMetaCache[videoId];
+            if (!meta || !meta.segments || !meta.segments.length) return;
 
-        const progressBar = getProgressBar();
-        const video = document.querySelector('video');
-        if (!progressBar || !video || !isFinite(video.duration) || video.duration <= 0) return;
+            const progressBar = getProgressBar();
+            const video = document.querySelector('video');
+            if (!progressBar) return;
+            if (!video || !isFinite(video.duration) || video.duration <= 0) return;
 
-        let container = progressBar.querySelector('#yt-sb-previewbar');
-        if (!container) {
-            container = document.createElement('div');
-            container.id = 'yt-sb-previewbar';
-            progressBar.prepend(container);
+            let container = progressBar.querySelector('#yt-sb-previewbar');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'yt-sb-previewbar';
+                progressBar.insertBefore(container, progressBar.firstChild);
+            }
+
+            if (container.dataset.renderedVideoId === videoId && container.children.length === meta.segments.length) {
+                return;
+            }
+
+            container.replaceChildren();
+            container.dataset.renderedVideoId = videoId;
+            const duration = video.duration;
+
+            for (const seg of meta.segments) {
+                const [start, end] = seg.segment;
+                const leftPct = Math.max(0, Math.min(100, (start / duration) * 100));
+                const widthPct = Math.max(0.2, Math.min(100 - leftPct, ((end - start) / duration) * 100));
+
+                const marker = document.createElement('div');
+                marker.className = `yt-sb-segment ${seg.category}`;
+                marker.style.left = `${leftPct}%`;
+                marker.style.width = `${widthPct}%`;
+                container.appendChild(marker);
+            }
+            console.log(`[SPONSOR-BLOCK] 🎨 Rendered ${meta.segments.length} segment markers on timeline (${videoId})`);
+        } catch (err) {
+            console.error('[SPONSOR-BLOCK] ❌ renderSponsorSegments error: ' + err.name + ': ' + err.message + ' | ' + err.stack);
         }
-
-        if (container.dataset.renderedVideoId === videoId && container.children.length === meta.segments.length) {
-            return;
-        }
-
-        container.innerHTML = '';
-        container.dataset.renderedVideoId = videoId;
-        const duration = video.duration;
-
-        for (const seg of meta.segments) {
-            const [start, end] = seg.segment;
-            const leftPct = Math.max(0, Math.min(100, (start / duration) * 100));
-            const widthPct = Math.max(0.2, Math.min(100 - leftPct, ((end - start) / duration) * 100));
-
-            const marker = document.createElement('div');
-            marker.className = `yt-sb-segment ${seg.category}`;
-            marker.style.left = `${leftPct}%`;
-            marker.style.width = `${widthPct}%`;
-            container.appendChild(marker);
-        }
-        console.log(`[SPONSOR-BLOCK] 🎨 Rendered ${meta.segments.length} segment markers on timeline`);
     }
 
     function hookVideoEvents() {
@@ -493,11 +550,13 @@
     // 9. Auto-Confirm "Still Watching?"
     function handleStillWatching() {
         if (!userConfig.auto_confirm_watching) return;
-        const confirmBtn = document.querySelector('yt-confirm-dialog-renderer #confirm-button button') ||
-            document.querySelector('#confirm-button.yt-confirm-dialog-renderer');
-        if (confirmBtn) {
-            confirmBtn.click();
-        }
+        try {
+            const confirmBtn = document.querySelector('yt-confirm-dialog-renderer #confirm-button button') ||
+                document.querySelector('#confirm-button.yt-confirm-dialog-renderer');
+            if (confirmBtn) {
+                confirmBtn.click();
+            }
+        } catch (_) {}
     }
 
     // 10. Picture-in-Picture
@@ -524,11 +583,12 @@
         pipBtn.id = 'yt-desktop-pip-btn';
         pipBtn.className = 'ytp-button yt-desktop-pip-btn';
         pipBtn.title = 'Picture-in-Picture (Cmd+Shift+P)';
-        pipBtn.innerHTML = `
-            <svg viewBox="0 0 24 24">
-                <path d="M19 7h-8v6h8V7zm2-4H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16.01H3V4.99h18v14.02z"/>
-            </svg>
-        `;
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('viewBox', '0 0 24 24');
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', 'M19 7h-8v6h8V7zm2-4H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16.01H3V4.99h18v14.02z');
+        svg.appendChild(path);
+        pipBtn.replaceChildren(svg);
         pipBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             togglePiP();
@@ -545,11 +605,13 @@
     // 11. Title Sync
     let lastReportedTitle = '';
     function syncTitle() {
-        const title = document.title;
-        if (title && title !== lastReportedTitle) {
-            lastReportedTitle = title;
-            postIpc({ type: 'title', value: title });
-        }
+        try {
+            const title = document.title;
+            if (title && title !== lastReportedTitle) {
+                lastReportedTitle = title;
+                postIpc({ type: 'title', value: title });
+            }
+        } catch (_) {}
     }
 
     // 12. Global Keyboard Shortcuts
@@ -593,20 +655,20 @@
 
     // 13. Main Loop & Observers
     function tick() {
-        try { injectStyles(); } catch (_) {}
-        try { checkShortsRedirect(); } catch (_) {}
-        try { handleVideoAds(); } catch (_) {}
-        try { handleAntiAdblock(); } catch (_) {}
-        try { handleStillWatching(); } catch (_) {}
-        try { injectPiPButton(); } catch (_) {}
-        try { syncTitle(); } catch (_) {}
-        try { enforceMaxQuality(); } catch (_) {}
-        try { hookVideoEvents(); } catch (_) {}
+        injectStyles();
+        checkShortsRedirect();
+        handleVideoAds();
+        handleAntiAdblock();
+        handleStillWatching();
+        injectPiPButton();
+        syncTitle();
+        enforceMaxQuality();
+        hookVideoEvents();
 
-        try { syncVideoMeta(); } catch (_) {}
-        try { applyDislikes(); } catch (_) {}
-        try { renderSponsorSegments(); } catch (_) {}
-        try { checkSponsorSkip(); } catch (_) {}
+        syncVideoMeta();
+        applyDislikes();
+        renderSponsorSegments();
+        checkSponsorSkip();
     }
 
     tick();
