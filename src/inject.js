@@ -278,19 +278,37 @@
     };
 
     // 6. Return YouTube Dislike DOM Injection
-    function getDislikeButtons() {
-        const candidates = Array.from(document.querySelectorAll(
-            'segmented-like-dislike-button-view-model dislike-button-view-model button, ' +
-            'ytd-segmented-like-dislike-button-renderer dislike-button-view-model button, ' +
-            '#segmented-dislike-button button, ' +
-            'dislike-button-view-model button, ' +
-            '.yt-spec-button-shape-next--segmented-end, ' +
+    function getDislikeButtonHost() {
+        const segViewModel = document.querySelector('segmented-like-dislike-button-view-model');
+        if (segViewModel) {
+            const btn = segViewModel.querySelector('dislike-button-view-model') || segViewModel.children[1];
+            if (btn) return btn;
+        }
+        const legacySeg = document.querySelector('ytd-segmented-like-dislike-button-renderer');
+        if (legacySeg) {
+            const btn = legacySeg.querySelector('#segmented-dislike-button') || legacySeg.children[1];
+            if (btn) return btn;
+        }
+        const candidates = document.querySelectorAll(
+            'dislike-button-view-model, ' +
+            '#segmented-dislike-button, ' +
             'button[aria-label*="не нравится" i], ' +
             'button[aria-label*="dislike" i]'
-        ));
-        // Exclude 0-width hidden/dead buttons when visible candidates exist
-        const visible = candidates.filter(b => b.offsetWidth > 0 || b.offsetHeight > 0 || b.getClientRects().length > 0);
-        return visible.length > 0 ? visible : candidates;
+        );
+        for (const c of candidates) {
+            if (c.offsetWidth > 0 || c.offsetHeight > 0 || c.getClientRects().length > 0) {
+                return c;
+            }
+        }
+        return candidates[0] || null;
+    }
+
+    function getActivationButton(control) {
+        if (!control) return null;
+        if (control.matches && control.matches('button, tp-yt-paper-button#button')) {
+            return control;
+        }
+        return control.querySelector ? control.querySelector('button, tp-yt-paper-button#button') : null;
     }
 
     function applyDislikes() {
@@ -306,57 +324,61 @@
             const likes = meta.dislikes.likes;
             if (dislikes === undefined || dislikes === null) return;
 
-            const dislikeButtons = getDislikeButtons();
-            for (const dislikeBtn of dislikeButtons) {
-                let label = dislikeBtn.querySelector('.yt-ryd-label');
-                if (!label) {
-                    label = document.createElement('div');
-                    label.className = 'yt-spec-button-shape-next__button-text-content ytSpecButtonShapeNextButtonTextContent yt-ryd-label';
-                    const span = document.createElement('span');
-                    span.setAttribute('role', 'text');
-                    span.textContent = formatCount(dislikes);
-                    label.replaceChildren(span);
+            const dislikeButtonHost = getDislikeButtonHost();
+            if (!dislikeButtonHost) return;
 
-                    const icon = dislikeBtn.querySelector('.yt-spec-button-shape-next__icon, yt-icon, svg')?.closest('div') || dislikeBtn.firstElementChild;
-                    if (icon && icon.nextSibling) {
-                        dislikeBtn.insertBefore(label, icon.nextSibling);
-                    } else {
-                        dislikeBtn.appendChild(label);
-                    }
-                    console.log(`[RYD-DISLIKE] ✅ Injected dislike count (${formatCount(dislikes)}) into visible button (w=${dislikeBtn.offsetWidth})`);
+            const actionBtn = getActivationButton(dislikeButtonHost);
+            if (!actionBtn) return;
+
+            let label = actionBtn.querySelector('.yt-ryd-label') || dislikeButtonHost.querySelector('.yt-ryd-label');
+            const formatted = formatCount(dislikes);
+
+            if (!label) {
+                label = document.createElement('div');
+                label.className = 'yt-spec-button-shape-next__button-text-content ytSpecButtonShapeNextButtonTextContent yt-ryd-label';
+                const span = document.createElement('span');
+                span.setAttribute('role', 'text');
+                span.textContent = formatted;
+                label.appendChild(span);
+
+                const feedback = actionBtn.querySelector('yt-touch-feedback-shape');
+                if (feedback && feedback.parentNode === actionBtn) {
+                    actionBtn.insertBefore(label, feedback);
                 } else {
-                    const span = label.querySelector('span') || label;
-                    const text = formatCount(dislikes);
-                    if (span.textContent !== text) {
-                        span.textContent = text;
-                    }
+                    actionBtn.appendChild(label);
                 }
-
-                dislikeBtn.classList.remove(
-                    'yt-spec-button-shape-next--icon-only',
-                    'ytSpecButtonShapeNextIconOnly',
-                    'yt-spec-button-shape-next--icon-button',
-                    'ytSpecButtonShapeNextIconButton'
-                );
-                dislikeBtn.classList.add(
-                    'yt-spec-button-shape-next--icon-leading',
-                    'ytSpecButtonShapeNextIconLeading'
-                );
-
-                dislikeBtn.style.setProperty('width', 'auto', 'important');
-                dislikeBtn.style.setProperty('min-width', '52px', 'important');
-                dislikeBtn.style.setProperty('padding-right', '14px', 'important');
-                dislikeBtn.style.setProperty('overflow', 'visible', 'important');
-                dislikeBtn.style.setProperty('display', 'inline-flex', 'important');
-
-                // Expand parent view-model wrappers
-                let p = dislikeBtn.parentElement;
-                while (p && p.tagName !== 'SEGMENTED-LIKE-DISLIKE-BUTTON-VIEW-MODEL' && p.tagName !== 'YTD-SEGMENTED-LIKE-DISLIKE-BUTTON-RENDERER' && p !== document.body) {
-                    p.style.setProperty('width', 'auto', 'important');
-                    p.style.setProperty('min-width', '52px', 'important');
-                    p.style.setProperty('overflow', 'visible', 'important');
-                    p = p.parentElement;
+                console.log(`[RYD-DISLIKE] ✅ Injected dislike count (${formatted}) into button`);
+            } else {
+                const span = label.querySelector('span') || label;
+                if (span.textContent !== formatted) {
+                    span.textContent = formatted;
                 }
+            }
+
+            actionBtn.classList.remove(
+                'yt-spec-button-shape-next--icon-only',
+                'ytSpecButtonShapeNextIconOnly',
+                'yt-spec-button-shape-next--icon-button',
+                'ytSpecButtonShapeNextIconButton'
+            );
+            actionBtn.classList.add(
+                'yt-spec-button-shape-next--icon-leading',
+                'ytSpecButtonShapeNextIconLeading',
+                'ryd-dislike-button-override'
+            );
+
+            actionBtn.style.setProperty('width', 'auto', 'important');
+            actionBtn.style.setProperty('min-width', '52px', 'important');
+            actionBtn.style.setProperty('padding-right', '14px', 'important');
+            actionBtn.style.setProperty('overflow', 'visible', 'important');
+            actionBtn.style.setProperty('display', 'inline-flex', 'important');
+
+            let p = actionBtn.parentElement;
+            while (p && p.tagName !== 'SEGMENTED-LIKE-DISLIKE-BUTTON-VIEW-MODEL' && p.tagName !== 'YTD-SEGMENTED-LIKE-DISLIKE-BUTTON-RENDERER' && p !== document.body) {
+                p.style.setProperty('width', 'auto', 'important');
+                p.style.setProperty('min-width', '52px', 'important');
+                p.style.setProperty('overflow', 'visible', 'important');
+                p = p.parentElement;
             }
 
             // Ratio Bar under like/dislike segmented container
@@ -590,11 +612,358 @@
         } catch (_) {}
     }
 
-    // 12. Global Keyboard Shortcuts
+    // 12. Apple-Grade Glass Control Center HUD & Pill
+    function renderGlassPill() {
+        if (!document.body) return;
+        let pill = document.getElementById('yt-desktop-pill');
+        if (!pill) {
+            pill = document.createElement('div');
+            pill.id = 'yt-desktop-pill';
+            pill.setAttribute('title', 'Панель управления yt-desktop (⌘,)');
+
+            const dot = document.createElement('div');
+            dot.className = 'yt-pill-dot';
+            dot.id = 'yt-pill-dot';
+
+            const label = document.createElement('span');
+            label.className = 'yt-pill-label';
+            label.id = 'yt-pill-label';
+            label.textContent = '⚡ Anti-DPI';
+
+            const ping = document.createElement('span');
+            ping.className = 'yt-pill-ping';
+            ping.id = 'yt-pill-ping';
+            ping.textContent = '•';
+
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.setAttribute('class', 'yt-pill-gear');
+            svg.setAttribute('viewBox', '0 0 24 24');
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('d', 'M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z');
+            svg.appendChild(path);
+
+            pill.appendChild(dot);
+            pill.appendChild(label);
+            pill.appendChild(ping);
+            pill.appendChild(svg);
+
+            pill.addEventListener('click', (e) => {
+                e.stopPropagation();
+                window.__toggleHud();
+            });
+
+            document.body.appendChild(pill);
+        }
+    }
+
+    function updateActiveStrategyChip(activeId) {
+        const chips = document.querySelectorAll('.yt-strat-chip');
+        for (const chip of chips) {
+            if (chip.dataset.strategyId === activeId) {
+                chip.classList.add('active');
+            } else {
+                chip.classList.remove('active');
+            }
+        }
+    }
+
+    function renderControlCenterHud() {
+        if (!document.body) return;
+        let hud = document.getElementById('yt-desktop-hud');
+        if (!hud) {
+            hud = document.createElement('div');
+            hud.id = 'yt-desktop-hud';
+
+            // Header
+            const header = document.createElement('div');
+            header.className = 'yt-hud-header';
+
+            const titleBox = document.createElement('div');
+            titleBox.className = 'yt-hud-title-box';
+            const title = document.createElement('div');
+            title.className = 'yt-hud-title';
+            title.textContent = 'Управление YouTube';
+            const subtitle = document.createElement('div');
+            subtitle.className = 'yt-hud-subtitle';
+            subtitle.id = 'yt-hud-subtitle';
+            subtitle.textContent = 'Anti-DPI • en0 bypass';
+            titleBox.appendChild(title);
+            titleBox.appendChild(subtitle);
+
+            const benchBtn = document.createElement('button');
+            benchBtn.className = 'yt-hud-bench-btn';
+            benchBtn.id = 'yt-hud-bench-btn';
+            benchBtn.textContent = '⚡ Тест сети';
+            benchBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                benchBtn.textContent = '⏳ Тестирую...';
+                benchBtn.disabled = true;
+                const dot = document.getElementById('yt-pill-dot');
+                if (dot) dot.classList.add('busy');
+                postIpc({ type: 'run_dpi_benchmark' });
+            });
+
+            header.appendChild(titleBox);
+            header.appendChild(benchBtn);
+            hud.appendChild(header);
+
+            // Section 1: DPI Strategies Grid
+            const stratSec = document.createElement('div');
+            const stratLabel = document.createElement('div');
+            stratLabel.className = 'yt-hud-section-label';
+            stratLabel.textContent = 'Стратегия обхода DPI';
+            stratSec.appendChild(stratLabel);
+
+            const stratGrid = document.createElement('div');
+            stratGrid.className = 'yt-hud-strategies-grid';
+            stratGrid.id = 'yt-hud-strategies-grid';
+
+            const strategies = [
+                { id: 'auto', name: '⚡ Авто-выбор', ping: '' },
+                { id: 'rostelecom', name: 'Ростелеком / Дом.ру', ping: '' },
+                { id: 'mts_megafon', name: 'МТС / Мегафон / Yota', ping: '' },
+                { id: 'beeline_mgts', name: 'Билайн / МГТС / Теле2', ping: '' },
+                { id: 'tlsrec_midsld', name: 'TLS Record (SLD)', ping: '' },
+                { id: 'direct', name: 'Прямое (без DPI)', ping: '' },
+            ];
+
+            for (const s of strategies) {
+                const chip = document.createElement('div');
+                chip.className = 'yt-strat-chip';
+                chip.dataset.strategyId = s.id;
+
+                const nameEl = document.createElement('div');
+                nameEl.className = 'yt-strat-name';
+                nameEl.textContent = s.name;
+
+                const pingEl = document.createElement('div');
+                pingEl.className = 'yt-strat-ping';
+                pingEl.textContent = s.ping || 'готов';
+
+                chip.appendChild(nameEl);
+                chip.appendChild(pingEl);
+
+                chip.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    postIpc({ type: 'set_dpi_strategy', strategy_id: s.id });
+                    updateActiveStrategyChip(s.id);
+                });
+
+                stratGrid.appendChild(chip);
+            }
+            stratSec.appendChild(stratGrid);
+            hud.appendChild(stratSec);
+
+            // Section 2: Features Toggles
+            const togSec = document.createElement('div');
+            const togLabel = document.createElement('div');
+            togLabel.className = 'yt-hud-section-label';
+            togLabel.textContent = 'Функции и расширения';
+            togSec.appendChild(togLabel);
+
+            const togglesList = document.createElement('div');
+            togglesList.className = 'yt-hud-toggles';
+            togglesList.id = 'yt-hud-toggles';
+
+            const toggleDefs = [
+                { key: 'block_ads', icon: '🛡️', title: 'Блокировка рекламы' },
+                { key: 'sponsor_block', icon: '⏩', title: 'SponsorBlock (пропуск спонсоров)' },
+                { key: 'return_dislikes', icon: '👎', title: 'Return Dislike (счётчик дизлайков)' },
+                { key: 'block_shorts', icon: '🚫', title: 'Скрыть Shorts ленту' },
+                { key: 'max_quality', icon: '🎬', title: 'Max Quality (автомакс 4K/8K)' },
+                { key: 'oled_black', icon: '🖤', title: 'OLED Pure Black (истинный черный)' },
+                { key: 'enable_pip', icon: '🪟', title: 'Режим «Картинка в картинке»' },
+                { key: 'auto_confirm_watching', icon: '☕', title: 'Не прерывать (Still Watching)' },
+            ];
+
+            for (const t of toggleDefs) {
+                const row = document.createElement('div');
+                row.className = 'yt-hud-toggle-row';
+
+                const info = document.createElement('div');
+                info.className = 'yt-toggle-info';
+                const icon = document.createElement('div');
+                icon.className = 'yt-toggle-icon';
+                icon.textContent = t.icon;
+                const textBox = document.createElement('div');
+                textBox.className = 'yt-toggle-text';
+                const titleEl = document.createElement('div');
+                titleEl.className = 'yt-toggle-title';
+                titleEl.textContent = t.title;
+                textBox.appendChild(titleEl);
+                info.appendChild(icon);
+                info.appendChild(textBox);
+
+                const switchLabel = document.createElement('label');
+                switchLabel.className = 'yt-apple-switch';
+                const input = document.createElement('input');
+                input.type = 'checkbox';
+                input.dataset.key = t.key;
+                input.checked = !!userConfig[t.key];
+                input.addEventListener('change', () => {
+                    userConfig[t.key] = input.checked;
+                    window.__applyConfig(userConfig);
+                    postIpc({ type: 'save_config', config: userConfig });
+                });
+
+                const slider = document.createElement('span');
+                slider.className = 'yt-apple-slider';
+
+                switchLabel.appendChild(input);
+                switchLabel.appendChild(slider);
+
+                row.appendChild(info);
+                row.appendChild(switchLabel);
+                togglesList.appendChild(row);
+            }
+            togSec.appendChild(togglesList);
+            hud.appendChild(togSec);
+
+            // Footer
+            const footer = document.createElement('div');
+            footer.className = 'yt-hud-footer';
+
+            const shortcut = document.createElement('span');
+            shortcut.textContent = 'Горячая клавиша: ⌘,';
+
+            const openFolderBtn = document.createElement('button');
+            openFolderBtn.className = 'yt-hud-folder-btn';
+            openFolderBtn.textContent = '📁 Папка конфига';
+            openFolderBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                postIpc({ type: 'open_config_folder' });
+            });
+
+            footer.appendChild(shortcut);
+            footer.appendChild(openFolderBtn);
+            hud.appendChild(footer);
+
+            document.body.appendChild(hud);
+
+            // Close on click outside
+            document.addEventListener('click', (e) => {
+                if (hud.classList.contains('open') && !hud.contains(e.target) && !document.getElementById('yt-desktop-pill')?.contains(e.target)) {
+                    hud.classList.remove('open');
+                }
+            });
+
+            // Close on Esc
+            window.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && hud.classList.contains('open')) {
+                    hud.classList.remove('open');
+                }
+            });
+        }
+    }
+
+    window.__toggleHud = function() {
+        renderGlassPill();
+        renderControlCenterHud();
+        const hud = document.getElementById('yt-desktop-hud');
+        if (hud) {
+            hud.classList.toggle('open');
+            if (hud.classList.contains('open')) {
+                postIpc({ type: 'get_hud_state' });
+            }
+        }
+    };
+
+    window.__onHudState = function(cfg, status) {
+        try {
+            renderGlassPill();
+            renderControlCenterHud();
+
+            if (cfg) {
+                window.__applyConfig(cfg);
+                const inputs = document.querySelectorAll('#yt-hud-toggles input[type="checkbox"]');
+                for (const input of inputs) {
+                    const k = input.dataset.key;
+                    if (k && cfg[k] !== undefined) {
+                        input.checked = !!cfg[k];
+                    }
+                }
+            }
+
+            if (status) {
+                const strategyMap = {
+                    'auto': 'Авто',
+                    'rostelecom': 'Ростелеком',
+                    'mts_megafon': 'МТС / Мегафон',
+                    'beeline_mgts': 'Билайн / МГТС',
+                    'tlsrec_midsld': 'TLS Record',
+                    'tlsrec_sni': 'TLS SNI',
+                    'direct': 'Прямое'
+                };
+
+                const activeId = status.active_strategy || 'rostelecom';
+                const selectedId = status.selected_strategy || 'auto';
+                const activeName = strategyMap[activeId] || activeId;
+
+                const pillLabel = document.getElementById('yt-pill-label');
+                if (pillLabel) {
+                    if (selectedId === 'auto') {
+                        pillLabel.textContent = `⚡ Авто (${activeName})`;
+                    } else {
+                        pillLabel.textContent = `⚡ ${activeName}`;
+                    }
+                }
+
+                const pillPing = document.getElementById('yt-pill-ping');
+                if (pillPing) {
+                    if (status.last_latency_ms != null && status.last_latency_ms > 0) {
+                        pillPing.textContent = `${status.last_latency_ms} ms`;
+                    } else {
+                        pillPing.textContent = 'активен';
+                    }
+                }
+
+                updateActiveStrategyChip(selectedId);
+            }
+        } catch (err) {
+            console.error('[HUD] ❌ Error in __onHudState: ' + (err.stack || err.message || String(err)));
+        }
+    };
+
+    window.__onBenchmarkDone = function(results, status) {
+        try {
+            const benchBtn = document.getElementById('yt-hud-bench-btn');
+            if (benchBtn) {
+                benchBtn.textContent = '⚡ Тест сети';
+                benchBtn.disabled = false;
+            }
+            const dot = document.getElementById('yt-pill-dot');
+            if (dot) dot.classList.remove('busy');
+
+            if (Array.isArray(results)) {
+                for (const r of results) {
+                    const chip = document.querySelector(`.yt-strat-chip[data-strategy-id="${r.strategy_id}"]`);
+                    if (chip) {
+                        const pingEl = chip.querySelector('.yt-strat-ping');
+                        if (pingEl) {
+                            if (r.success && r.latency_ms != null) {
+                                pingEl.textContent = `${r.latency_ms} ms`;
+                                pingEl.style.color = '#4ade80';
+                            } else {
+                                pingEl.textContent = 'сбой';
+                                pingEl.style.color = '#ef4444';
+                            }
+                        }
+                    }
+                }
+            }
+            if (status) {
+                window.__onHudState(null, status);
+            }
+        } catch (err) {
+            console.error('[HUD] ❌ Error in __onBenchmarkDone: ' + (err.stack || err.message || String(err)));
+        }
+    };
+
+    // 13. Global Keyboard Shortcuts
     window.addEventListener('keydown', (e) => {
         if (e.metaKey && e.key === ',') {
             e.preventDefault();
-            postIpc({ type: 'open_settings' });
+            window.__toggleHud();
             return;
         }
         if (e.metaKey && e.shiftKey && e.key.toLowerCase() === 'p') {
@@ -629,9 +998,11 @@
         tick();
     });
 
-    // 13. Main Loop & Observers
+    // 14. Main Loop & Observers
     function tick() {
         injectStyles();
+        renderGlassPill();
+        renderControlCenterHud();
         checkShortsRedirect();
         handleVideoAds();
         handleAntiAdblock();
@@ -661,6 +1032,11 @@
             }
         });
     }
+
+    // Initial HUD state request from Rust
+    setTimeout(() => {
+        postIpc({ type: 'get_hud_state' });
+    }, 100);
 
     console.log('[yt-desktop] High-speed extensions engine initialized.');
 })();

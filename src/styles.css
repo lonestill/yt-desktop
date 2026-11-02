@@ -77,13 +77,16 @@ html.yt-hide-shorts yt-chip-cloud-chip-renderer:has(yt-formatted-string[title="S
 }
 
 /* 5. Return YouTube Dislike Button Styling */
+segmented-like-dislike-button-view-model,
 segmented-like-dislike-button-view-model dislike-button-view-model,
 dislike-button-view-model,
 dislike-button-view-model toggle-button-view-model,
 dislike-button-view-model button-view-model,
-#segmented-dislike-button {
+#segmented-dislike-button,
+ytd-segmented-like-dislike-button-renderer dislike-button-view-model {
     width: auto !important;
     min-width: 52px !important;
+    max-width: none !important;
     overflow: visible !important;
     display: inline-flex !important;
 }
@@ -93,9 +96,11 @@ dislike-button-view-model button,
 ytd-segmented-like-dislike-button-renderer button:last-child,
 .yt-spec-button-shape-next--segmented-end,
 button[aria-label*="не нравится" i],
-button[aria-label*="dislike" i] {
+button[aria-label*="dislike" i],
+.ryd-dislike-button-override {
     width: auto !important;
     min-width: 52px !important;
+    max-width: none !important;
     padding-left: 10px !important;
     padding-right: 14px !important;
     overflow: visible !important;
@@ -105,24 +110,24 @@ button[aria-label*="dislike" i] {
     justify-content: center !important;
 }
 
-.yt-ryd-label {
+/* Force YouTube to NEVER hide text in dislike button */
+dislike-button-view-model button .yt-spec-button-shape-next__button-text-content,
+dislike-button-view-model button .ytSpecButtonShapeNextButtonTextContent,
+#segmented-dislike-button .yt-spec-button-shape-next__button-text-content,
+.yt-spec-button-shape-next--segmented-end .yt-spec-button-shape-next__button-text-content,
+.yt-spec-button-shape-next--icon-only .yt-spec-button-shape-next__button-text-content,
+.yt-spec-button-shape-next--icon-only .ytSpecButtonShapeNextButtonTextContent,
+.yt-ryd-label,
+.yt-ryd-label span {
     display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
+    visibility: visible !important;
+    opacity: 1 !important;
     margin-left: 6px !important;
     color: inherit !important;
     vertical-align: middle !important;
     line-height: 1 !important;
     font-size: 14px !important;
     font-weight: 500 !important;
-    white-space: nowrap !important;
-}
-
-.yt-ryd-label span {
-    font-size: 14px !important;
-    font-weight: 500 !important;
-    color: inherit !important;
-    line-height: 1 !important;
     white-space: nowrap !important;
 }
 
@@ -217,4 +222,336 @@ html.yt-oled-black ytd-app {
 /* 8. Clean dark mode background default */
 html[dark], [dark] {
     --yt-spec-base-background: #0f0f0f !important;
+}
+
+/* ==========================================================================
+   yt-desktop: Apple-Grade Glassmorphic Control Center HUD & Pill
+   ========================================================================== */
+
+/* 1. Floating Pill in Top-Right */
+#yt-desktop-pill {
+    position: fixed !important;
+    top: 14px !important;
+    right: 84px !important;
+    height: 32px !important;
+    padding: 0 12px !important;
+    border-radius: 16px !important;
+    background: rgba(24, 24, 28, 0.78) !important;
+    backdrop-filter: blur(24px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.14) !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05) inset !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    cursor: pointer !important;
+    z-index: 99999 !important;
+    user-select: none !important;
+    -webkit-user-select: none !important;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif !important;
+    color: #f2f2f2 !important;
+}
+
+#yt-desktop-pill:hover {
+    background: rgba(36, 36, 42, 0.9) !important;
+    border-color: rgba(255, 255, 255, 0.28) !important;
+    transform: translateY(-1px) scale(1.02) !important;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5), 0 0 12px rgba(10, 132, 255, 0.25) !important;
+}
+
+#yt-desktop-pill:active {
+    transform: translateY(0) scale(0.98) !important;
+}
+
+.yt-pill-dot {
+    width: 7px !important;
+    height: 7px !important;
+    border-radius: 50% !important;
+    background: #34c759 !important;
+    box-shadow: 0 0 8px #34c759 !important;
+    flex-shrink: 0 !important;
+}
+.yt-pill-dot.busy {
+    background: #ff9500 !important;
+    box-shadow: 0 0 8px #ff9500 !important;
+    animation: ytPillPulse 0.9s infinite alternate !important;
+}
+@keyframes ytPillPulse { from { opacity: 0.4; } to { opacity: 1; } }
+
+.yt-pill-label {
+    font-size: 12px !important;
+    font-weight: 500 !important;
+    white-space: nowrap !important;
+}
+
+.yt-pill-ping {
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    color: #4ade80 !important;
+    background: rgba(52, 199, 89, 0.15) !important;
+    padding: 1px 6px !important;
+    border-radius: 10px !important;
+    font-variant-numeric: tabular-nums !important;
+}
+
+.yt-pill-gear {
+    width: 14px !important;
+    height: 14px !important;
+    fill: #a1a1aa !important;
+    transition: transform 0.3s ease !important;
+}
+#yt-desktop-pill:hover .yt-pill-gear {
+    transform: rotate(45deg) !important;
+    fill: #ffffff !important;
+}
+
+/* 2. Glass Control Center Popover (HUD) */
+#yt-desktop-hud {
+    position: fixed !important;
+    top: 54px !important;
+    right: 84px !important;
+    width: 350px !important;
+    max-height: calc(100vh - 80px) !important;
+    overflow-y: auto !important;
+    background: rgba(22, 22, 26, 0.88) !important;
+    backdrop-filter: blur(40px) saturate(200%) !important;
+    -webkit-backdrop-filter: blur(40px) saturate(200%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.16) !important;
+    border-radius: 18px !important;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.08) inset !important;
+    padding: 16px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 14px !important;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif !important;
+    color: #ffffff !important;
+    z-index: 100000 !important;
+    user-select: none !important;
+    -webkit-user-select: none !important;
+    opacity: 0 !important;
+    transform: translateY(-8px) scale(0.96) !important;
+    pointer-events: none !important;
+    transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+#yt-desktop-hud.open {
+    opacity: 1 !important;
+    transform: translateY(0) scale(1) !important;
+    pointer-events: auto !important;
+}
+
+/* HUD Scrollbar */
+#yt-desktop-hud::-webkit-scrollbar {
+    width: 4px !important;
+}
+#yt-desktop-hud::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15) !important;
+    border-radius: 4px !important;
+}
+
+/* HUD Header */
+.yt-hud-header {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding-bottom: 12px !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+.yt-hud-title-box {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 2px !important;
+}
+.yt-hud-title {
+    font-size: 14px !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.2px !important;
+    color: #ffffff !important;
+}
+.yt-hud-subtitle {
+    font-size: 11px !important;
+    color: #a1a1aa !important;
+}
+
+.yt-hud-bench-btn {
+    background: rgba(10, 132, 255, 0.18) !important;
+    border: 1px solid rgba(10, 132, 255, 0.4) !important;
+    color: #60a5fa !important;
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    padding: 5px 10px !important;
+    border-radius: 8px !important;
+    cursor: pointer !important;
+    transition: all 0.15s ease !important;
+}
+.yt-hud-bench-btn:hover {
+    background: rgba(10, 132, 255, 0.3) !important;
+    color: #ffffff !important;
+}
+.yt-hud-bench-btn:active {
+    transform: scale(0.96) !important;
+}
+
+/* HUD Section Title */
+.yt-hud-section-label {
+    font-size: 10px !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.6px !important;
+    text-transform: uppercase !important;
+    color: #71717a !important;
+    margin-bottom: 6px !important;
+}
+
+/* Strategies Grid */
+.yt-hud-strategies-grid {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 6px !important;
+}
+
+.yt-strat-chip {
+    background: rgba(255, 255, 255, 0.05) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 9px !important;
+    padding: 8px 10px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 2px !important;
+    cursor: pointer !important;
+    transition: all 0.15s ease !important;
+}
+
+.yt-strat-chip:hover {
+    background: rgba(255, 255, 255, 0.09) !important;
+    border-color: rgba(255, 255, 255, 0.18) !important;
+}
+
+.yt-strat-chip.active {
+    background: rgba(10, 132, 255, 0.22) !important;
+    border-color: rgba(10, 132, 255, 0.55) !important;
+    box-shadow: 0 0 14px rgba(10, 132, 255, 0.2) inset !important;
+}
+
+.yt-strat-name {
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    color: #e4e4e7 !important;
+}
+.yt-strat-chip.active .yt-strat-name {
+    color: #ffffff !important;
+}
+
+.yt-strat-ping {
+    font-size: 10px !important;
+    color: #71717a !important;
+    font-variant-numeric: tabular-nums !important;
+}
+.yt-strat-chip.active .yt-strat-ping {
+    color: #93c5fd !important;
+}
+
+/* HUD Toggles List */
+.yt-hud-toggles {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 4px !important;
+}
+
+.yt-hud-toggle-row {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding: 7px 10px !important;
+    border-radius: 8px !important;
+    background: rgba(255, 255, 255, 0.03) !important;
+    transition: background 0.15s ease !important;
+}
+.yt-hud-toggle-row:hover {
+    background: rgba(255, 255, 255, 0.06) !important;
+}
+
+.yt-toggle-info {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+}
+.yt-toggle-icon {
+    font-size: 14px !important;
+    width: 18px !important;
+    text-align: center !important;
+}
+.yt-toggle-text {
+    display: flex !important;
+    flex-direction: column !important;
+}
+.yt-toggle-title {
+    font-size: 12px !important;
+    font-weight: 500 !important;
+    color: #e4e4e7 !important;
+}
+
+/* Modern Apple Switch */
+.yt-apple-switch {
+    position: relative !important;
+    display: inline-block !important;
+    width: 36px !important;
+    height: 20px !important;
+    flex-shrink: 0 !important;
+}
+.yt-apple-switch input {
+    opacity: 0 !important;
+    width: 0 !important;
+    height: 0 !important;
+}
+.yt-apple-slider {
+    position: absolute !important;
+    cursor: pointer !important;
+    top: 0; left: 0; right: 0; bottom: 0 !important;
+    background: rgba(255, 255, 255, 0.16) !important;
+    transition: 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    border-radius: 20px !important;
+}
+.yt-apple-slider:before {
+    position: absolute !important;
+    content: "" !important;
+    height: 16px !important;
+    width: 16px !important;
+    left: 2px !important;
+    bottom: 2px !important;
+    background: #ffffff !important;
+    transition: 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    border-radius: 50% !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3) !important;
+}
+.yt-apple-switch input:checked + .yt-apple-slider {
+    background: #34c759 !important;
+}
+.yt-apple-switch input:checked + .yt-apple-slider:before {
+    transform: translateX(16px) !important;
+}
+
+/* HUD Footer */
+.yt-hud-footer {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding-top: 10px !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+    font-size: 11px !important;
+    color: #71717a !important;
+}
+.yt-hud-folder-btn {
+    background: transparent !important;
+    border: none !important;
+    color: #3b82f6 !important;
+    font-size: 11px !important;
+    cursor: pointer !important;
+    padding: 0 !important;
+    transition: color 0.15s ease !important;
+}
+.yt-hud-folder-btn:hover {
+    color: #60a5fa !important;
+    text-decoration: underline !important;
 }
