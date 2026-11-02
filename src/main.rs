@@ -156,8 +156,10 @@ fn main() {
         .expect("Failed to initialize WebKit Webview");
 
     let app_dir_clone = app_dir.clone();
+    let _dpi_guard = dpi_handle;
 
     event_loop.run(move |event, _, control_flow| {
+        let _ = &_dpi_guard;
         *control_flow = ControlFlow::Wait;
         match event {
             Event::UserEvent(AppEvent::ChangeTitle(mut title)) => {

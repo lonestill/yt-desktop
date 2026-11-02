@@ -8,6 +8,11 @@ CONTENTS="$APP_DIR/Contents"
 MACOS="$CONTENTS/MacOS"
 RESOURCES="$CONTENTS/Resources"
 
+echo "[*] Building tpws zapret engine..."
+cd "$DIR/tpws"
+cc -std=gnu99 -Imacos -Iepoll-shim/include -o tpws *.c epoll-shim/src/*.c -lz -lpthread
+strip tpws
+
 echo "[*] Building release binary..."
 cd "$DIR"
 cargo build --release
@@ -17,7 +22,8 @@ rm -rf "$APP_DIR"
 mkdir -p "$MACOS" "$RESOURCES"
 
 cp "$DIR/target/release/yt-desktop" "$MACOS/yt-desktop"
-chmod +x "$MACOS/yt-desktop"
+cp "$DIR/tpws/tpws" "$MACOS/tpws"
+chmod +x "$MACOS/yt-desktop" "$MACOS/tpws"
 
 if [ -f "/Users/a123/Projects/ytm-desktop/src-tauri/icons/icon.icns" ]; then
     cp "/Users/a123/Projects/ytm-desktop/src-tauri/icons/icon.icns" "$RESOURCES/AppIcon.icns"
