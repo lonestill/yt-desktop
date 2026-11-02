@@ -45,12 +45,17 @@ enum MainIpcMessage {
     RunDpiBenchmark,
     #[serde(rename = "open_config_folder")]
     OpenConfigFolder,
+    #[serde(rename = "complete_onboarding")]
+    CompleteOnboarding { strategy_id: String, config: AppConfig },
+    #[serde(rename = "show_hello")]
+    ShowHello,
 }
 
 enum AppEvent {
     ChangeTitle(String),
     Log { level: String, message: String },
     ToggleHud,
+    ShowHello,
     MenuItemClicked(String),
     UpdateHudState(serde_json::Value, serde_json::Value),
     BenchmarkDone(Vec<BenchmarkResult>, serde_json::Value),
@@ -105,8 +110,14 @@ fn main() {
     let app_dir = get_config_dir();
     let window_state = load_window_state(&app_dir);
 
+    // Check CLI flags (--first / -f / --welcome forces welcome screen)
+    let force_first_run = std::env::args().any(|a| a == "--first" || a == "-f" || a == "--welcome" || a == "--hello");
+
     // 1. Load persistent configuration
-    let config = Arc::new(Mutex::new(load_config()));
+    let (initial_config, is_new_config) = load_config();
+    let is_first_run = force_first_run || is_new_config || !initial_config.first_run_completed;
+
+    let config = Arc::new(Mutex::new(initial_config));
 
     // 2. Initialize embedded DPI bypass proxy engine
     let dpi_manager = {
@@ -172,9 +183,11 @@ fn main() {
     let init_script = format!(
         r#"
         window.__YT_DESKTOP_CSS__ = {};
+        window.__YT_FIRST_RUN__ = {};
         {}
         "#,
         serde_json::to_string(INJECT_CSS).unwrap_or_else(|_| "\"\"".to_string()),
+        serde_json::to_string(&is_first_run).unwrap_or_else(|_| "false".to_string()),
         INJECT_JS
     );
 
@@ -264,6 +277,26 @@ fn main() {
                         let dir = get_config_dir();
                         let _ = std::process::Command::new("open").arg(dir).spawn();
                     }
+                    MainIpcMessage::CompleteOnboarding { strategy_id, config: mut new_cfg } => {
+                        new_cfg.first_run_completed = true;
+                        save_config(&new_cfg);
+                        let mgr = Arc::clone(&ipc_dpi);
+                        let cfg_lock = Arc::clone(&ipc_cfg);
+                        let p = ipc_proxy.clone();
+                        thread::spawn(move || {
+                            let (cfg_val, status) = {
+                                let mut cfg = cfg_lock.lock().unwrap();
+                                *cfg = new_cfg;
+                                let _ = mgr.apply_strategy(&mut cfg, &strategy_id);
+                                save_config(&cfg);
+                                (serde_json::to_value(&*cfg).unwrap_or_default(), mgr.get_status_data(&cfg))
+                            };
+                            let _ = p.send_event(AppEvent::UpdateHudState(cfg_val, status));
+                        });
+                    }
+                    MainIpcMessage::ShowHello => {
+                        let _ = ipc_proxy.send_event(AppEvent::ShowHello);
+                    }
                     MainIpcMessage::FetchVideoMeta { video_id } => {
                         let p = ipc_proxy.clone();
                         thread::spawn(move || {
@@ -322,9 +355,12 @@ fn main() {
         let status = dpi_manager.get_status_data(&cfg);
         let cfg_json = serde_json::to_value(&*cfg).unwrap_or_default();
         let _ = main_webview.evaluate_script(&format!(
-            "if (window.__onHudState) window.__onHudState({}, {});",
-            cfg_json, status
+            "if (window.__onHudState) window.__onHudState({}, {}, {});",
+            cfg_json, status, is_first_run
         ));
+        if is_first_run {
+            let _ = main_webview.evaluate_script("if (window.__showHelloScreen) window.__showHelloScreen();");
+        }
     }
 
     let app_dir_clone = app_dir.clone();
@@ -354,10 +390,16 @@ fn main() {
             Event::UserEvent(AppEvent::ToggleHud) => {
                 let _ = main_webview.evaluate_script("if (window.__toggleHud) window.__toggleHud();");
             }
+            Event::UserEvent(AppEvent::ShowHello) => {
+                let _ = main_webview.evaluate_script("if (window.__showHelloScreen) window.__showHelloScreen();");
+            }
             Event::UserEvent(AppEvent::MenuItemClicked(id)) => {
                 match id.as_str() {
                     "app.preferences" => {
                         let _ = proxy.send_event(AppEvent::ToggleHud);
+                    }
+                    "app.welcome" => {
+                        let _ = proxy.send_event(AppEvent::ShowHello);
                     }
                     "view.reload" => {
                         let _ = main_webview.evaluate_script("window.location.reload();");

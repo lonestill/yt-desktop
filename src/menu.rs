@@ -26,9 +26,16 @@ impl AppMenu {
             true,
             Some(Accelerator::new(Modifiers::META, Code::Comma)),
         );
+        let welcome_item = MenuItem::with_id(
+            "app.welcome",
+            "👋 Экран настройки (Setup)...",
+            true,
+            None,
+        );
         app_menu.append(&PredefinedMenuItem::about(Some("О YouTube"), None))?;
         app_menu.append(&PredefinedMenuItem::separator())?;
         app_menu.append(&prefs_item)?;
+        app_menu.append(&welcome_item)?;
         app_menu.append(&PredefinedMenuItem::separator())?;
         app_menu.append(&PredefinedMenuItem::services(None))?;
         app_menu.append(&PredefinedMenuItem::separator())?;

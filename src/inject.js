@@ -854,16 +854,31 @@
             const shortcut = document.createElement('span');
             shortcut.textContent = 'Горячая клавиша: ⌘,';
 
+            const linksBox = document.createElement('div');
+            linksBox.style.cssText = 'display:flex;gap:12px;align-items:center;';
+
+            const openWelcomeBtn = document.createElement('button');
+            openWelcomeBtn.className = 'yt-hud-folder-btn';
+            openWelcomeBtn.textContent = '👋 Мастер настройки';
+            openWelcomeBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                hud.classList.remove('open');
+                window.__showHelloScreen();
+            });
+
             const openFolderBtn = document.createElement('button');
             openFolderBtn.className = 'yt-hud-folder-btn';
-            openFolderBtn.textContent = '📁 Папка конфига';
+            openFolderBtn.textContent = '📁 Конфиг';
             openFolderBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 postIpc({ type: 'open_config_folder' });
             });
 
+            linksBox.appendChild(openWelcomeBtn);
+            linksBox.appendChild(openFolderBtn);
+
             footer.appendChild(shortcut);
-            footer.appendChild(openFolderBtn);
+            footer.appendChild(linksBox);
             hud.appendChild(footer);
 
             document.body.appendChild(hud);
@@ -897,13 +912,16 @@
         }
     };
 
-    window.__onHudState = function(cfg, status) {
+    window.__onHudState = function(cfg, status, isFirstRun) {
         try {
             renderGlassPill();
             renderControlCenterHud();
             const hud = document.getElementById('yt-desktop-hud');
             if (hud && hud.classList.contains('open')) {
                 positionHud();
+            }
+            if (isFirstRun) {
+                window.__showHelloScreen();
             }
 
             if (cfg) {
@@ -992,7 +1010,345 @@
         }
     };
 
-    // 13. Global Keyboard Shortcuts
+    // 13. Apple-Grade Welcome / Hello Screen (Onboarding)
+    const I18N = {
+        ru: {
+            title: "YouTube Desktop",
+            subtitle: "Сверхлегкий плеер без рекламы и ограничений скорости",
+            mode_title: "Режим подключения:",
+            badge_bypass: "Для РФ",
+            name_bypass: "Россия • Обход DPI",
+            desc_bypass: "Встроенный zapret (midsld/oob/disorder). Обходит замедление и блокировки ТСПУ без внешних VPN.",
+            badge_direct: "Весь мир",
+            name_direct: "Global • Direct Connection",
+            desc_direct: "Прямой доступ на максимальной скорости без прокси. Для Европы, США и стран без цензуры.",
+            features_title: "Включенные возможности:",
+            feat_adblock: "Блокировка рекламы",
+            feat_sponsor: "SponsorBlock (пропуск)",
+            feat_dislikes: "Возврат дизлайков",
+            feat_shorts: "Скрыть Shorts ленту",
+            feat_quality: "Автомакс 4K/8K",
+            feat_oled: "OLED Pure Black",
+            btn_start: "Начать просмотр",
+        },
+        en: {
+            title: "YouTube Desktop",
+            subtitle: "Ultra-lightweight native client with adblock & enhancements",
+            mode_title: "Choose Connection Mode:",
+            badge_bypass: "For Russia",
+            name_bypass: "Russia • DPI Bypass",
+            desc_bypass: "Built-in zapret engine. Bypasses TSPU throttling and censorship without external VPNs.",
+            badge_direct: "Worldwide",
+            name_direct: "Global • Direct Connection",
+            desc_direct: "Direct ultra-fast playback with zero proxy overhead. Ideal for US, Europe & censorship-free networks.",
+            features_title: "Included Superpowers:",
+            feat_adblock: "Built-in AdBlock",
+            feat_sponsor: "SponsorBlock (Auto-Skip)",
+            feat_dislikes: "Return YouTube Dislike",
+            feat_shorts: "Distraction-Free Feed",
+            feat_quality: "Auto-Max 4K/8K",
+            feat_oled: "OLED Pure Black",
+            btn_start: "Get Started",
+        }
+    };
+
+    function detectDefaultLang() {
+        const navLang = (navigator.language || navigator.userLanguage || '').toLowerCase();
+        if (navLang.startsWith('ru') || navLang.startsWith('be') || navLang.startsWith('kk') || navLang.startsWith('uk')) {
+            return 'ru';
+        }
+        return 'en';
+    }
+
+    let currentWelcomeLang = detectDefaultLang();
+    let currentWelcomeMode = currentWelcomeLang === 'ru' ? 'bypass' : 'direct';
+
+    function renderWelcomeScreen() {
+        if (!document.body) return;
+        let overlay = document.getElementById('yt-desktop-welcome');
+        if (overlay) {
+            overlay.classList.add('open');
+            return;
+        }
+
+        overlay = document.createElement('div');
+        overlay.id = 'yt-desktop-welcome';
+
+        const card = document.createElement('div');
+        card.className = 'yt-welcome-card';
+
+        // Header
+        const header = document.createElement('div');
+        header.className = 'yt-welcome-header';
+
+        const brand = document.createElement('div');
+        brand.className = 'yt-welcome-brand';
+
+        const logo = document.createElement('div');
+        logo.className = 'yt-welcome-logo';
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('viewBox', '0 0 24 24');
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', 'M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z');
+        svg.appendChild(path);
+        logo.appendChild(svg);
+
+        const titles = document.createElement('div');
+        titles.className = 'yt-welcome-titles';
+        const title = document.createElement('h1');
+        title.className = 'yt-welcome-title';
+        title.dataset.i18n = 'title';
+        title.textContent = I18N[currentWelcomeLang].title;
+        const subtitle = document.createElement('p');
+        subtitle.className = 'yt-welcome-subtitle';
+        subtitle.dataset.i18n = 'subtitle';
+        subtitle.textContent = I18N[currentWelcomeLang].subtitle;
+        titles.appendChild(title);
+        titles.appendChild(subtitle);
+
+        brand.appendChild(logo);
+        brand.appendChild(titles);
+
+        // Language switcher
+        const langToggle = document.createElement('div');
+        langToggle.className = 'yt-welcome-lang-toggle';
+        const ruBtn = document.createElement('button');
+        ruBtn.type = 'button';
+        ruBtn.className = 'yt-lang-btn' + (currentWelcomeLang === 'ru' ? ' active' : '');
+        ruBtn.dataset.lang = 'ru';
+        ruBtn.textContent = '🇷🇺 RU';
+        const enBtn = document.createElement('button');
+        enBtn.type = 'button';
+        enBtn.className = 'yt-lang-btn' + (currentWelcomeLang === 'en' ? ' active' : '');
+        enBtn.dataset.lang = 'en';
+        enBtn.textContent = '🇬🇧 EN';
+
+        ruBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            setWelcomeLang('ru');
+        });
+        enBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            setWelcomeLang('en');
+        });
+
+        langToggle.appendChild(ruBtn);
+        langToggle.appendChild(enBtn);
+
+        header.appendChild(brand);
+        header.appendChild(langToggle);
+        card.appendChild(header);
+
+        // Mode Section
+        const modeSec = document.createElement('div');
+        modeSec.className = 'yt-welcome-section';
+        const modeSecTitle = document.createElement('div');
+        modeSecTitle.className = 'yt-welcome-sec-title';
+        modeSecTitle.dataset.i18n = 'mode_title';
+        modeSecTitle.textContent = I18N[currentWelcomeLang].mode_title;
+        modeSec.appendChild(modeSecTitle);
+
+        const modesBox = document.createElement('div');
+        modesBox.className = 'yt-welcome-modes';
+
+        // Bypass card
+        const bypassCard = document.createElement('div');
+        bypassCard.className = 'yt-mode-card' + (currentWelcomeMode === 'bypass' ? ' active' : '');
+        bypassCard.dataset.mode = 'bypass';
+
+        const bypassBadge = document.createElement('div');
+        bypassBadge.className = 'yt-mode-badge bypass';
+        bypassBadge.dataset.i18n = 'badge_bypass';
+        bypassBadge.textContent = I18N[currentWelcomeLang].badge_bypass;
+
+        const bypassIcon = document.createElement('div');
+        bypassIcon.className = 'yt-mode-icon';
+        bypassIcon.textContent = '⚡';
+
+        const bypassInfo = document.createElement('div');
+        bypassInfo.className = 'yt-mode-info';
+        const bypassName = document.createElement('div');
+        bypassName.className = 'yt-mode-name';
+        bypassName.dataset.i18n = 'name_bypass';
+        bypassName.textContent = I18N[currentWelcomeLang].name_bypass;
+        const bypassDesc = document.createElement('div');
+        bypassDesc.className = 'yt-mode-desc';
+        bypassDesc.dataset.i18n = 'desc_bypass';
+        bypassDesc.textContent = I18N[currentWelcomeLang].desc_bypass;
+        bypassInfo.appendChild(bypassName);
+        bypassInfo.appendChild(bypassDesc);
+
+        const bypassRadio = document.createElement('div');
+        bypassRadio.className = 'yt-mode-radio';
+
+        bypassCard.appendChild(bypassBadge);
+        bypassCard.appendChild(bypassIcon);
+        bypassCard.appendChild(bypassInfo);
+        bypassCard.appendChild(bypassRadio);
+
+        // Direct card
+        const directCard = document.createElement('div');
+        directCard.className = 'yt-mode-card' + (currentWelcomeMode === 'direct' ? ' active' : '');
+        directCard.dataset.mode = 'direct';
+
+        const directBadge = document.createElement('div');
+        directBadge.className = 'yt-mode-badge direct';
+        directBadge.dataset.i18n = 'badge_direct';
+        directBadge.textContent = I18N[currentWelcomeLang].badge_direct;
+
+        const directIcon = document.createElement('div');
+        directIcon.className = 'yt-mode-icon';
+        directIcon.textContent = '🚀';
+
+        const directInfo = document.createElement('div');
+        directInfo.className = 'yt-mode-info';
+        const directName = document.createElement('div');
+        directName.className = 'yt-mode-name';
+        directName.dataset.i18n = 'name_direct';
+        directName.textContent = I18N[currentWelcomeLang].name_direct;
+        const directDesc = document.createElement('div');
+        directDesc.className = 'yt-mode-desc';
+        directDesc.dataset.i18n = 'desc_direct';
+        directDesc.textContent = I18N[currentWelcomeLang].desc_direct;
+        directInfo.appendChild(directName);
+        directInfo.appendChild(directDesc);
+
+        const directRadio = document.createElement('div');
+        directRadio.className = 'yt-mode-radio';
+
+        directCard.appendChild(directBadge);
+        directCard.appendChild(directIcon);
+        directCard.appendChild(directInfo);
+        directCard.appendChild(directRadio);
+
+        bypassCard.addEventListener('click', (e) => {
+            e.stopPropagation();
+            currentWelcomeMode = 'bypass';
+            bypassCard.classList.add('active');
+            directCard.classList.remove('active');
+        });
+
+        directCard.addEventListener('click', (e) => {
+            e.stopPropagation();
+            currentWelcomeMode = 'direct';
+            directCard.classList.add('active');
+            bypassCard.classList.remove('active');
+        });
+
+        modesBox.appendChild(bypassCard);
+        modesBox.appendChild(directCard);
+        modeSec.appendChild(modesBox);
+        card.appendChild(modeSec);
+
+        // Features Preview Section
+        const featSec = document.createElement('div');
+        featSec.className = 'yt-welcome-section';
+        const featTitle = document.createElement('div');
+        featTitle.className = 'yt-welcome-sec-title';
+        featTitle.dataset.i18n = 'features_title';
+        featTitle.textContent = I18N[currentWelcomeLang].features_title;
+        featSec.appendChild(featTitle);
+
+        const chipsGrid = document.createElement('div');
+        chipsGrid.className = 'yt-welcome-chips';
+
+        const chips = [
+            { icon: '🛡️', key: 'feat_adblock' },
+            { icon: '⏩', key: 'feat_sponsor' },
+            { icon: '👎', key: 'feat_dislikes' },
+            { icon: '🚫', key: 'feat_shorts' },
+            { icon: '🎬', key: 'feat_quality' },
+            { icon: '🖤', key: 'feat_oled' },
+        ];
+
+        for (const c of chips) {
+            const chip = document.createElement('div');
+            chip.className = 'yt-welcome-chip';
+            chip.textContent = c.icon + ' ';
+            const span = document.createElement('span');
+            span.dataset.i18n = c.key;
+            span.textContent = I18N[currentWelcomeLang][c.key];
+            chip.appendChild(span);
+            chipsGrid.appendChild(chip);
+        }
+        featSec.appendChild(chipsGrid);
+        card.appendChild(featSec);
+
+        // Footer & Submit
+        const footer = document.createElement('div');
+        footer.className = 'yt-welcome-footer';
+
+        const submitBtn = document.createElement('button');
+        submitBtn.type = 'button';
+        submitBtn.className = 'yt-welcome-submit-btn';
+        submitBtn.id = 'yt-welcome-submit';
+
+        const submitText = document.createElement('span');
+        submitText.dataset.i18n = 'btn_start';
+        submitText.textContent = I18N[currentWelcomeLang].btn_start;
+
+        const arrow = document.createElement('span');
+        arrow.className = 'yt-arrow';
+        arrow.textContent = '→';
+
+        submitBtn.appendChild(submitText);
+        submitBtn.appendChild(arrow);
+
+        submitBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const chosenStrategy = currentWelcomeMode === 'direct' ? 'direct' : 'auto';
+            userConfig.selected_strategy = chosenStrategy;
+            userConfig.first_run_completed = true;
+            userConfig.app_locale = currentWelcomeLang;
+
+            postIpc({
+                type: 'complete_onboarding',
+                strategy_id: chosenStrategy,
+                config: userConfig
+            });
+
+            overlay.classList.remove('open');
+            setTimeout(() => {
+                overlay.remove();
+            }, 300);
+        });
+
+        footer.appendChild(submitBtn);
+        card.appendChild(footer);
+
+        overlay.appendChild(card);
+        document.body.appendChild(overlay);
+
+        requestAnimationFrame(() => {
+            overlay.classList.add('open');
+        });
+    }
+
+    function setWelcomeLang(lang) {
+        if (!I18N[lang]) return;
+        currentWelcomeLang = lang;
+
+        const ruBtn = document.querySelector('.yt-lang-btn[data-lang="ru"]');
+        const enBtn = document.querySelector('.yt-lang-btn[data-lang="en"]');
+        if (ruBtn && enBtn) {
+            ruBtn.classList.toggle('active', lang === 'ru');
+            enBtn.classList.toggle('active', lang === 'en');
+        }
+
+        const elements = document.querySelectorAll('#yt-desktop-welcome [data-i18n]');
+        for (const el of elements) {
+            const key = el.dataset.i18n;
+            if (key && I18N[lang][key]) {
+                el.textContent = I18N[lang][key];
+            }
+        }
+    }
+
+    window.__showHelloScreen = function() {
+        renderWelcomeScreen();
+    };
+
+    // 14. Global Keyboard Shortcuts
     window.addEventListener('keydown', (e) => {
         if (e.metaKey && e.key === ',') {
             e.preventDefault();
@@ -1069,7 +1425,10 @@
     // Initial HUD state request from Rust
     setTimeout(() => {
         postIpc({ type: 'get_hud_state' });
-    }, 100);
+        if (window.__YT_FIRST_RUN__ === true) {
+            window.__showHelloScreen();
+        }
+    }, 120);
 
     console.log('[yt-desktop] High-speed extensions engine initialized.');
 })();

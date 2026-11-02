@@ -2,8 +2,17 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
+fn default_locale() -> String {
+    "auto".to_string()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
+    #[serde(default)]
+    pub first_run_completed: bool,
+    #[serde(default = "default_locale")]
+    pub app_locale: String,
+
     // DPI Settings
     pub selected_strategy: String, // "auto" or preset id or "custom"
     pub active_strategy: String,
@@ -24,6 +33,8 @@ pub struct AppConfig {
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
+            first_run_completed: false,
+            app_locale: "auto".to_string(),
             selected_strategy: "auto".to_string(),
             active_strategy: "rostelecom".to_string(),
             custom_tpws_args: "".to_string(),
@@ -51,16 +62,16 @@ pub fn get_config_path() -> PathBuf {
     get_config_dir().join("config.json")
 }
 
-pub fn load_config() -> AppConfig {
+pub fn load_config() -> (AppConfig, bool) {
     let path = get_config_path();
     if let Ok(data) = fs::read_to_string(&path) {
         if let Ok(cfg) = serde_json::from_str(&data) {
-            return cfg;
+            return (cfg, false);
         }
     }
     let default_cfg = AppConfig::default();
     save_config(&default_cfg);
-    default_cfg
+    (default_cfg, true)
 }
 
 pub fn save_config(config: &AppConfig) {
