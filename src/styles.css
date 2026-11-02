@@ -573,7 +573,7 @@ ytd-masthead #yt-desktop-pill,
 }
 
 /* ==========================================================================
-   yt-desktop: Apple-Grade Welcome / Hello Screen (Onboarding)
+   yt-desktop: Minimalist Native Network Setup Dialog (Zero Slop)
    ========================================================================== */
 
 #yt-desktop-welcome {
@@ -582,16 +582,16 @@ ytd-masthead #yt-desktop-pill,
     left: 0 !important;
     right: 0 !important;
     bottom: 0 !important;
-    background: rgba(10, 10, 14, 0.78) !important;
-    backdrop-filter: blur(48px) saturate(190%) !important;
-    -webkit-backdrop-filter: blur(48px) saturate(190%) !important;
+    background: rgba(0, 0, 0, 0.65) !important;
+    backdrop-filter: blur(28px) !important;
+    -webkit-backdrop-filter: blur(28px) !important;
     z-index: 2147483647 !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
     opacity: 0 !important;
     pointer-events: none !important;
-    transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1), transform 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    transition: opacity 0.18s cubic-bezier(0.16, 1, 0.3, 1) !important;
     user-select: none !important;
     -webkit-user-select: none !important;
 }
@@ -602,291 +602,149 @@ ytd-masthead #yt-desktop-pill,
 }
 
 .yt-welcome-card {
-    width: 530px !important;
-    max-width: calc(100vw - 36px) !important;
-    background: rgba(22, 22, 27, 0.92) !important;
-    border: 1px solid rgba(255, 255, 255, 0.16) !important;
-    border-radius: 22px !important;
-    box-shadow: 0 32px 80px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.08) inset !important;
-    padding: 26px 28px !important;
+    width: 360px !important;
+    max-width: calc(100vw - 32px) !important;
+    background: rgba(20, 20, 24, 0.94) !important;
+    backdrop-filter: blur(40px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(40px) saturate(180%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.14) !important;
+    border-radius: 16px !important;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.06) inset !important;
+    padding: 20px !important;
     display: flex !important;
     flex-direction: column !important;
-    gap: 18px !important;
-    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", sans-serif !important;
+    gap: 14px !important;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif !important;
     color: #ffffff !important;
-    transform: scale(0.96) !important;
-    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    transform: translateY(-6px) scale(0.97) !important;
+    transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 
 #yt-desktop-welcome.open .yt-welcome-card {
-    transform: scale(1) !important;
+    transform: translateY(0) scale(1) !important;
 }
 
 /* Header */
 .yt-welcome-header {
     display: flex !important;
-    align-items: flex-start !important;
+    align-items: center !important;
     justify-content: space-between !important;
-    gap: 12px !important;
-}
-
-.yt-welcome-brand {
-    display: flex !important;
-    align-items: center !important;
-    gap: 14px !important;
-}
-
-.yt-welcome-logo {
-    width: 44px !important;
-    height: 44px !important;
-    border-radius: 12px !important;
-    background: linear-gradient(135deg, #ff0033, #c40028) !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    box-shadow: 0 6px 18px rgba(255, 0, 51, 0.35) !important;
-    flex-shrink: 0 !important;
-}
-
-.yt-welcome-logo svg {
-    width: 26px !important;
-    height: 26px !important;
-    fill: #ffffff !important;
-}
-
-.yt-welcome-titles {
-    display: flex !important;
-    flex-direction: column !important;
 }
 
 .yt-welcome-title {
-    font-size: 19px !important;
-    font-weight: 700 !important;
-    letter-spacing: -0.4px !important;
-    margin: 0 !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    letter-spacing: -0.2px !important;
     color: #ffffff !important;
+    margin: 0 !important;
 }
 
-.yt-welcome-subtitle {
-    font-size: 12px !important;
-    color: #a1a1aa !important;
-    margin: 2px 0 0 0 !important;
-    font-weight: 400 !important;
-    line-height: 1.35 !important;
-}
-
-/* Language Toggle */
 .yt-welcome-lang-toggle {
     display: flex !important;
-    background: rgba(255, 255, 255, 0.08) !important;
-    border-radius: 9px !important;
-    padding: 2px !important;
-    border: 1px solid rgba(255, 255, 255, 0.1) !important;
-    flex-shrink: 0 !important;
+    align-items: center !important;
+    gap: 2px !important;
+    font-size: 11px !important;
+    color: #52525b !important;
 }
 
 .yt-lang-btn {
     background: transparent !important;
     border: none !important;
-    color: #a1a1aa !important;
+    color: #71717a !important;
     font-size: 11px !important;
     font-weight: 600 !important;
-    padding: 4px 8px !important;
-    border-radius: 7px !important;
     cursor: pointer !important;
-    transition: all 0.15s ease !important;
+    padding: 2px 4px !important;
+    border-radius: 4px !important;
+    transition: color 0.15s ease !important;
 }
 
 .yt-lang-btn.active {
-    background: rgba(255, 255, 255, 0.18) !important;
-    color: #ffffff !important;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2) !important;
-}
-
-/* Section */
-.yt-welcome-section {
-    display: flex !important;
-    flex-direction: column !important;
-    gap: 8px !important;
-}
-
-.yt-welcome-sec-title {
-    font-size: 11px !important;
-    font-weight: 700 !important;
-    text-transform: uppercase !important;
-    letter-spacing: 0.6px !important;
-    color: #71717a !important;
-}
-
-/* Mode Selection Cards */
-.yt-welcome-modes {
-    display: flex !important;
-    flex-direction: column !important;
-    gap: 10px !important;
-}
-
-.yt-mode-card {
-    position: relative !important;
-    display: flex !important;
-    align-items: center !important;
-    gap: 14px !important;
-    padding: 13px 15px !important;
-    border-radius: 13px !important;
-    background: rgba(255, 255, 255, 0.04) !important;
-    border: 1.5px solid rgba(255, 255, 255, 0.09) !important;
-    cursor: pointer !important;
-    transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1) !important;
-}
-
-.yt-mode-card:hover {
-    background: rgba(255, 255, 255, 0.08) !important;
-    border-color: rgba(255, 255, 255, 0.22) !important;
-}
-
-.yt-mode-card.active {
-    background: rgba(10, 132, 255, 0.16) !important;
-    border-color: #0a84ff !important;
-    box-shadow: 0 0 18px rgba(10, 132, 255, 0.22) inset !important;
-}
-
-.yt-mode-badge {
-    position: absolute !important;
-    top: -7px !important;
-    right: 14px !important;
-    font-size: 9px !important;
-    font-weight: 700 !important;
-    padding: 2px 7px !important;
-    border-radius: 5px !important;
-    text-transform: uppercase !important;
-    letter-spacing: 0.4px !important;
-}
-
-.yt-mode-badge.bypass {
-    background: #e50914 !important;
     color: #ffffff !important;
 }
 
-.yt-mode-badge.direct {
-    background: #34c759 !important;
-    color: #ffffff !important;
-}
-
-.yt-mode-icon {
-    font-size: 22px !important;
-    width: 34px !important;
-    height: 34px !important;
-    border-radius: 9px !important;
-    background: rgba(255, 255, 255, 0.06) !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    flex-shrink: 0 !important;
-}
-
-.yt-mode-info {
-    display: flex !important;
-    flex-direction: column !important;
-    gap: 2px !important;
-    flex: 1 !important;
-}
-
-.yt-mode-name {
-    font-size: 13px !important;
-    font-weight: 700 !important;
-    color: #f4f4f5 !important;
-}
-
-.yt-mode-desc {
-    font-size: 11px !important;
+.yt-lang-btn:hover {
     color: #a1a1aa !important;
-    line-height: 1.35 !important;
 }
 
-.yt-mode-radio {
-    width: 18px !important;
-    height: 18px !important;
-    border-radius: 50% !important;
-    border: 2px solid rgba(255, 255, 255, 0.3) !important;
-    flex-shrink: 0 !important;
+/* Segmented Control */
+.yt-welcome-segmented {
+    display: flex !important;
+    background: rgba(255, 255, 255, 0.06) !important;
+    border-radius: 10px !important;
+    padding: 3px !important;
+    gap: 3px !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+.yt-welcome-seg-btn {
+    flex: 1 !important;
+    background: transparent !important;
+    border: none !important;
+    padding: 8px 10px !important;
+    border-radius: 7px !important;
+    color: #a1a1aa !important;
+    font-size: 12px !important;
+    font-weight: 500 !important;
+    cursor: pointer !important;
+    transition: all 0.15s ease !important;
+    text-align: center !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    transition: all 0.15s ease !important;
-}
-
-.yt-mode-card.active .yt-mode-radio {
-    border-color: #0a84ff !important;
-    background: #0a84ff !important;
-}
-
-.yt-mode-card.active .yt-mode-radio:after {
-    content: "" !important;
-    width: 6px !important;
-    height: 6px !important;
-    border-radius: 50% !important;
-    background: #ffffff !important;
-}
-
-/* Feature Chips */
-.yt-welcome-chips {
-    display: grid !important;
-    grid-template-columns: 1fr 1fr 1fr !important;
     gap: 6px !important;
 }
 
-.yt-welcome-chip {
-    background: rgba(255, 255, 255, 0.04) !important;
-    border: 1px solid rgba(255, 255, 255, 0.08) !important;
-    border-radius: 8px !important;
-    padding: 6px 8px !important;
-    font-size: 11px !important;
-    font-weight: 500 !important;
+.yt-welcome-seg-btn:hover {
     color: #e4e4e7 !important;
-    display: flex !important;
-    align-items: center !important;
-    gap: 6px !important;
 }
 
-/* Footer Submit Button */
-.yt-welcome-footer {
-    display: flex !important;
-    flex-direction: column !important;
-    gap: 8px !important;
-    padding-top: 4px !important;
-}
-
-.yt-welcome-submit-btn {
-    background: linear-gradient(135deg, #0a84ff, #5e5ce6) !important;
-    border: none !important;
+.yt-welcome-seg-btn.active {
+    background: rgba(255, 255, 255, 0.14) !important;
     color: #ffffff !important;
-    font-size: 14px !important;
-    font-weight: 700 !important;
-    padding: 13px 20px !important;
-    border-radius: 12px !important;
+    font-weight: 600 !important;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Description hint */
+.yt-welcome-hint {
+    font-size: 12px !important;
+    color: #a1a1aa !important;
+    line-height: 1.4 !important;
+    min-height: 34px !important;
+    margin: 0 !important;
+}
+
+/* Submit button */
+.yt-welcome-submit-btn {
+    background: #ffffff !important;
+    color: #09090b !important;
+    border: none !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    padding: 9px 16px !important;
+    border-radius: 9px !important;
     cursor: pointer !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    gap: 8px !important;
-    box-shadow: 0 4px 20px rgba(10, 132, 255, 0.35) !important;
-    transition: all 0.18s ease !important;
+    gap: 6px !important;
+    transition: all 0.15s ease !important;
+    width: 100% !important;
+    margin-top: 2px !important;
 }
 
 .yt-welcome-submit-btn:hover {
-    transform: translateY(-1px) scale(1.01) !important;
-    filter: brightness(1.1) !important;
-    box-shadow: 0 6px 24px rgba(10, 132, 255, 0.5) !important;
+    background: #e4e4e7 !important;
 }
 
 .yt-welcome-submit-btn:active {
-    transform: translateY(0) scale(0.99) !important;
+    transform: scale(0.98) !important;
+    background: #d4d4d8 !important;
 }
 
-.yt-welcome-submit-btn .yt-arrow {
-    font-size: 16px !important;
-    transition: transform 0.2s ease !important;
-}
-
-.yt-welcome-submit-btn:hover .yt-arrow {
-    transform: translateX(3px) !important;
+.yt-welcome-key {
+    font-size: 11px !important;
+    opacity: 0.55 !important;
+    font-family: inherit !important;
 }
