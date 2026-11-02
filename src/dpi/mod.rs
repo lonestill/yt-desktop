@@ -1,28 +1,15 @@
-pub mod forwarder;
-pub mod server;
-pub mod socks5;
 pub mod strategy;
-pub mod tls;
 
-use std::net::SocketAddr;
+use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
-use std::sync::Arc;
-use strategy::DesyncConfig;
-use tokio::net::TcpListener;
-
-pub struct DpiProxyHandle {
-    pub port: u16,
-    child: Option<Child>,
-}
-
-impl Drop for DpiProxyHandle {
-    fn drop(&mut self) {
-        if let Some(mut child) = self.child.take() {
-            let _ = child.kill();
-        }
-    }
-}
+use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time::Duration;
+use strategy::{
+    get_available_strategies, load_dpi_settings, probe_strategy, save_dpi_settings,
+    BenchmarkResult, DpiSettings,
+};
 
 fn find_tpws_binary() -> Option<PathBuf> {
     // 1. Next to current executable (inside YouTube.app/Contents/MacOS/tpws)
@@ -46,107 +33,176 @@ fn find_tpws_binary() -> Option<PathBuf> {
     None
 }
 
-/// Resolves a hostname strictly prioritizing IPv4.
-/// Critical for avoiding broken/dead IPv6 routes on macOS systems without IPv6 gateways.
-pub async fn resolve_ipv4(host: &str, port: u16) -> Result<SocketAddr, std::io::Error> {
-    if let Ok(ip) = host.parse::<std::net::IpAddr>() {
-        return Ok(SocketAddr::new(ip, port));
-    }
-    let addrs = tokio::net::lookup_host(format!("{}:{}", host, port)).await?;
-    for addr in addrs {
-        if addr.is_ipv4() {
-            return Ok(addr);
-        }
-    }
-    // Fallback if no IPv4
-    tokio::net::lookup_host(format!("{}:{}", host, port))
-        .await?
-        .next()
-        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "No IP address found for host"))
+pub struct DpiManager {
+    pub port: u16,
+    tpws_bin: PathBuf,
+    child: Mutex<Option<Child>>,
+    pub settings: Mutex<DpiSettings>,
 }
 
-/// Spawns the embedded anti-DPI proxy.
-/// Uses the battle-tested native Zapret TPWS engine (`--split-pos=midsld --disorder=tls`)
-/// if available, with automatic fallback to the internal Tokio SOCKS5 engine.
-pub fn start_dpi_proxy() -> Result<DpiProxyHandle, Box<dyn std::error::Error + Send + Sync>> {
-    // Check for native zapret engine first (proven to bypass Rostelecom & Russian TSPU)
-    if let Some(tpws_path) = find_tpws_binary() {
+impl Drop for DpiManager {
+    fn drop(&mut self) {
+        if let Ok(mut lock) = self.child.lock() {
+            if let Some(mut child) = lock.take() {
+                let _ = child.kill();
+                let _ = child.wait();
+            }
+        }
+    }
+}
+
+impl DpiManager {
+    pub fn new() -> Result<Arc<Self>, Box<dyn std::error::Error + Send + Sync>> {
+        let tpws_bin = find_tpws_binary()
+            .ok_or_else(|| "Native tpws binary not found in bundle or workspace".to_string())?;
+
+        // Allocate a persistent local port that WebKit will use for SOCKS5
         let port = {
-            let l = std::net::TcpListener::bind("127.0.0.1:0")?;
+            let l = TcpListener::bind("127.0.0.1:0")?;
             l.local_addr()?.port()
         };
 
-        match Command::new(&tpws_path)
-            .args([
-                "--socks",
-                "--bind-addr=127.0.0.1",
-                &format!("--port={port}"),
-                "--split-pos=midsld",
-                "--disorder=tls",
-                "--debug=2",
-            ])
-            .spawn()
-        {
+        let settings = load_dpi_settings();
+
+        let manager = Arc::new(Self {
+            port,
+            tpws_bin,
+            child: Mutex::new(None),
+            settings: Mutex::new(settings),
+        });
+
+        // Initialize active strategy
+        let active_id = {
+            let s = manager.settings.lock().unwrap();
+            if s.selected_strategy == "auto" {
+                s.active_strategy.clone()
+            } else {
+                s.selected_strategy.clone()
+            }
+        };
+
+        if let Err(e) = manager.spawn_tpws(&active_id) {
+            eprintln!("[DPI-BYPASS] ⚠️ Initial spawn of strategy '{active_id}' failed: {e}");
+            // Fallback to default rostelecom
+            let _ = manager.spawn_tpws("rostelecom");
+        }
+
+        Ok(manager)
+    }
+
+    fn spawn_tpws(&self, preset_id: &str) -> Result<(), String> {
+        let presets = get_available_strategies();
+        let preset = presets
+            .iter()
+            .find(|p| p.id == preset_id)
+            .ok_or_else(|| format!("Unknown strategy ID: {preset_id}"))?;
+
+        let mut lock = self.child.lock().map_err(|e| e.to_string())?;
+
+        // Terminate existing child process
+        if let Some(mut old_child) = lock.take() {
+            let _ = old_child.kill();
+            let _ = old_child.wait();
+            // Tiny pause to ensure kernel socket teardown
+            thread::sleep(Duration::from_millis(50));
+        }
+
+        let mut cmd = Command::new(&self.tpws_bin);
+        cmd.args([
+            "--socks",
+            "--bind-addr=127.0.0.1",
+            &format!("--port={}", self.port),
+            "--debug=1",
+        ]);
+        for arg in &preset.args {
+            cmd.arg(arg);
+        }
+
+        match cmd.spawn() {
             Ok(child) => {
                 println!(
-                    "[DPI-BYPASS] 🚀 Powered by Zapret TPWS at 127.0.0.1:{port} (mode: midsld + disorder=tls)"
+                    "[DPI-BYPASS] ⚡ Activated strategy '{}' ({}) on port {}",
+                    preset.name, preset.id, self.port
                 );
-                std::thread::sleep(std::time::Duration::from_millis(50));
-                return Ok(DpiProxyHandle {
-                    port,
-                    child: Some(child),
-                });
+                *lock = Some(child);
+
+                // Update settings
+                if let Ok(mut s) = self.settings.lock() {
+                    s.active_strategy = preset.id.clone();
+                    save_dpi_settings(&s);
+                }
+                thread::sleep(Duration::from_millis(80));
+                Ok(())
             }
-            Err(e) => {
-                eprintln!("[DPI-BYPASS] ⚠️ Failed to spawn tpws ({e}), falling back to internal engine");
-            }
+            Err(e) => Err(format!("Failed to spawn tpws: {e}")),
         }
     }
 
-    // Fallback: in-process Tokio proxy
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(4)
-        .enable_all()
-        .build()?;
+    pub fn set_strategy(&self, target_id: &str) -> Result<String, String> {
+        if target_id == "auto" {
+            // Run parallel benchmark and apply winner
+            let results = self.run_benchmark();
+            let winner = results.iter().filter(|r| r.success).min_by_key(|r| r.latency_ms.unwrap_or(u64::MAX));
 
-    let (tx, rx) = std::sync::mpsc::channel();
-
-    std::thread::spawn(move || {
-        rt.block_on(async move {
-            let listener = match TcpListener::bind("127.0.0.1:0").await {
-                Ok(l) => l,
-                Err(e) => {
-                    let _ = tx.send(Err(e.to_string()));
-                    return;
+            if let Some(w) = winner {
+                self.spawn_tpws(&w.strategy_id)?;
+                if let Ok(mut s) = self.settings.lock() {
+                    s.selected_strategy = "auto".to_string();
+                    s.active_strategy = w.strategy_id.clone();
+                    s.last_latency_ms = w.latency_ms;
+                    save_dpi_settings(&s);
                 }
-            };
+                Ok(w.strategy_id.clone())
+            } else {
+                Err("Все стратегии не смогли подключиться к YouTube".to_string())
+            }
+        } else {
+            self.spawn_tpws(target_id)?;
+            if let Ok(mut s) = self.settings.lock() {
+                s.selected_strategy = target_id.to_string();
+                s.active_strategy = target_id.to_string();
+                save_dpi_settings(&s);
+            }
+            Ok(target_id.to_string())
+        }
+    }
 
-            let port = match listener.local_addr() {
-                Ok(addr) => addr.port(),
-                Err(e) => {
-                    let _ = tx.send(Err(e.to_string()));
-                    return;
-                }
-            };
+    pub fn run_benchmark(&self) -> Vec<BenchmarkResult> {
+        let presets = get_available_strategies();
+        let tpws_bin = self.tpws_bin.clone();
 
-            let config = Arc::new(DesyncConfig::default());
-            let vpn_status = match crate::dpi::strategy::detect_vpn_interface() {
-                Some(ref iface) => format!("VPN Active ({iface}) -> Auto Pass-through"),
-                None => "Direct ISP -> Anti-DPI Desync".to_string(),
-            };
-            println!(
-                "[DPI-BYPASS] ⚡ Proxy online at 127.0.0.1:{port} | Mode: {:?} ({vpn_status}) | Delay: {}ms",
-                config.mode, config.delay_ms
-            );
+        println!("[DPI-BENCHMARK] 🚀 Probing {} strategies in parallel...", presets.len());
 
-            let _ = tx.send(Ok(port));
-            let _ = server::run_embedded_proxy(listener, config).await;
-        });
-    });
+        let mut handles = Vec::new();
+        for preset in presets {
+            let bin = tpws_bin.clone();
+            handles.push(thread::spawn(move || probe_strategy(&bin, &preset)));
+        }
 
-    let port = rx
-        .recv()?
-        .map_err(|e| format!("Failed to start DPI proxy: {e}"))?;
+        let mut results = Vec::new();
+        for h in handles {
+            if let Ok(res) = h.join() {
+                println!(
+                    "[DPI-BENCHMARK] -> {}: success={}, latency={:?}, error={:?}",
+                    res.strategy_id, res.success, res.latency_ms, res.error
+                );
+                results.push(res);
+            }
+        }
 
-    Ok(DpiProxyHandle { port, child: None })
+        results
+    }
+
+    pub fn get_status_data(&self) -> serde_json::Value {
+        let settings = self.settings.lock().unwrap().clone();
+        let presets = get_available_strategies();
+
+        serde_json::json!({
+            "port": self.port,
+            "selected_strategy": settings.selected_strategy,
+            "active_strategy": settings.active_strategy,
+            "last_latency_ms": settings.last_latency_ms,
+            "presets": presets,
+        })
+    }
 }

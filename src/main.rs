@@ -1,7 +1,12 @@
 mod dpi;
 
+use dpi::strategy::BenchmarkResult;
+use dpi::DpiManager;
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::thread;
 use tao::{
     dpi::{LogicalPosition, LogicalSize},
     event::{Event, WindowEvent},
@@ -9,7 +14,6 @@ use tao::{
     window::{Theme, Window, WindowBuilder},
 };
 use wry::{BackgroundThrottlingPolicy, ProxyConfig, ProxyEndpoint, WebContext, WebViewBuilder};
-use serde::{Deserialize, Serialize};
 
 const INJECT_CSS: &str = include_str!("styles.css");
 const INJECT_JS: &str = include_str!("inject.js");
@@ -21,11 +25,19 @@ enum IpcMessage {
     Title { value: String },
     #[serde(rename = "log")]
     Log { level: String, message: String },
+    #[serde(rename = "get_dpi_status")]
+    GetDpiStatus,
+    #[serde(rename = "set_dpi_strategy")]
+    SetDpiStrategy { strategy_id: String },
+    #[serde(rename = "run_dpi_benchmark")]
+    RunDpiBenchmark,
 }
 
 enum AppEvent {
     ChangeTitle(String),
     Log { level: String, message: String },
+    SendDpiStatus(serde_json::Value),
+    SendBenchmarkResults(Vec<BenchmarkResult>, serde_json::Value),
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -80,11 +92,11 @@ fn main() {
     let window_state = load_window_state(&app_dir);
 
     // 1. Initialize embedded DPI bypass proxy engine
-    let dpi_handle = match dpi::start_dpi_proxy() {
-        Ok(h) => Some(h),
+    let dpi_manager = match DpiManager::new() {
+        Ok(mgr) => mgr,
         Err(e) => {
-            eprintln!("[DPI-BYPASS] Warning: could not initialize DPI proxy: {e}");
-            None
+            eprintln!("[DPI-BYPASS] ❌ Fatal: failed to initialize DPI engine: {e}");
+            std::process::exit(1);
         }
     };
 
@@ -118,7 +130,9 @@ fn main() {
         INJECT_JS
     );
 
-    let mut webview_builder = WebViewBuilder::new_with_web_context(&mut web_context)
+    let proxy_port = dpi_manager.port;
+
+    let webview_builder = WebViewBuilder::new_with_web_context(&mut web_context)
         .with_autoplay(true)
         .with_back_forward_navigation_gestures(true)
         .with_accept_first_mouse(true)
@@ -127,26 +141,51 @@ fn main() {
         .with_user_agent(
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Safari/605.1.15",
         )
-        .with_initialization_script(&init_script);
-
-    // Route traffic through embedded DPI bypass proxy via SOCKS5
-    if let Some(ref handle) = dpi_handle {
-        webview_builder = webview_builder.with_proxy_config(ProxyConfig::Socks5(ProxyEndpoint {
+        .with_initialization_script(&init_script)
+        .with_proxy_config(ProxyConfig::Socks5(ProxyEndpoint {
             host: "127.0.0.1".to_string(),
-            port: handle.port.to_string(),
+            port: proxy_port.to_string(),
         }));
-    }
 
-    let _webview = webview_builder
+    let dpi_clone = Arc::clone(&dpi_manager);
+    let ipc_proxy = proxy.clone();
+
+    let webview = webview_builder
         .with_ipc_handler(move |req| {
             let body = req.body();
             if let Ok(msg) = serde_json::from_str::<IpcMessage>(body) {
                 match msg {
                     IpcMessage::Title { value } => {
-                        let _ = proxy.send_event(AppEvent::ChangeTitle(value));
+                        let _ = ipc_proxy.send_event(AppEvent::ChangeTitle(value));
                     }
                     IpcMessage::Log { level, message } => {
-                        let _ = proxy.send_event(AppEvent::Log { level, message });
+                        let _ = ipc_proxy.send_event(AppEvent::Log { level, message });
+                    }
+                    IpcMessage::GetDpiStatus => {
+                        let status = dpi_clone.get_status_data();
+                        let _ = ipc_proxy.send_event(AppEvent::SendDpiStatus(status));
+                    }
+                    IpcMessage::SetDpiStrategy { strategy_id } => {
+                        let mgr = Arc::clone(&dpi_clone);
+                        let p = ipc_proxy.clone();
+                        thread::spawn(move || {
+                            let _ = mgr.set_strategy(&strategy_id);
+                            let status = mgr.get_status_data();
+                            let _ = p.send_event(AppEvent::SendDpiStatus(status));
+                        });
+                    }
+                    IpcMessage::RunDpiBenchmark => {
+                        let mgr = Arc::clone(&dpi_clone);
+                        let p = ipc_proxy.clone();
+                        thread::spawn(move || {
+                            let results = mgr.run_benchmark();
+                            let winner = results.iter().filter(|r| r.success).min_by_key(|r| r.latency_ms.unwrap_or(u64::MAX));
+                            if let Some(w) = winner {
+                                let _ = mgr.set_strategy(&w.strategy_id);
+                            }
+                            let status = mgr.get_status_data();
+                            let _ = p.send_event(AppEvent::SendBenchmarkResults(results, status));
+                        });
                     }
                 }
             }
@@ -156,7 +195,7 @@ fn main() {
         .expect("Failed to initialize WebKit Webview");
 
     let app_dir_clone = app_dir.clone();
-    let _dpi_guard = dpi_handle;
+    let _dpi_guard = dpi_manager;
 
     event_loop.run(move |event, _, control_flow| {
         let _ = &_dpi_guard;
@@ -174,6 +213,18 @@ fn main() {
             }
             Event::UserEvent(AppEvent::Log { level, message }) => {
                 println!("[WEBVIEW-{level}] {message}");
+            }
+            Event::UserEvent(AppEvent::SendDpiStatus(status)) => {
+                let js = format!("if (window.__onDpiStatus) window.__onDpiStatus({});", status);
+                let _ = webview.evaluate_script(&js);
+            }
+            Event::UserEvent(AppEvent::SendBenchmarkResults(results, status)) => {
+                let res_json = serde_json::to_string(&results).unwrap_or_else(|_| "[]".to_string());
+                let js = format!(
+                    "if (window.__onDpiBenchmarkDone) window.__onDpiBenchmarkDone({}, {});",
+                    res_json, status
+                );
+                let _ = webview.evaluate_script(&js);
             }
             Event::WindowEvent {
                 event: WindowEvent::CloseRequested,
