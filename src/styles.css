@@ -77,20 +77,32 @@ html.yt-hide-shorts yt-chip-cloud-chip-renderer:has(yt-formatted-string[title="S
 }
 
 /* 5. Return YouTube Dislike Button Styling */
+segmented-like-dislike-button-view-model dislike-button-view-model,
 dislike-button-view-model,
+dislike-button-view-model toggle-button-view-model,
+dislike-button-view-model button-view-model,
 #segmented-dislike-button {
+    width: auto !important;
+    min-width: 52px !important;
+    overflow: visible !important;
     display: inline-flex !important;
 }
 
 dislike-button-view-model button,
 #segmented-dislike-button button,
 ytd-segmented-like-dislike-button-renderer button:last-child,
-.yt-spec-button-shape-next--segmented-end {
+.yt-spec-button-shape-next--segmented-end,
+button[aria-label*="не нравится" i],
+button[aria-label*="dislike" i] {
     width: auto !important;
     min-width: 52px !important;
-    padding-left: 8px !important;
-    padding-right: 12px !important;
+    padding-left: 10px !important;
+    padding-right: 14px !important;
     overflow: visible !important;
+    display: inline-flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: center !important;
 }
 
 .yt-ryd-label {
@@ -100,6 +112,10 @@ ytd-segmented-like-dislike-button-renderer button:last-child,
     margin-left: 6px !important;
     color: inherit !important;
     vertical-align: middle !important;
+    line-height: 1 !important;
+    font-size: 14px !important;
+    font-weight: 500 !important;
+    white-space: nowrap !important;
 }
 
 .yt-ryd-label span {
@@ -107,6 +123,7 @@ ytd-segmented-like-dislike-button-renderer button:last-child,
     font-weight: 500 !important;
     color: inherit !important;
     line-height: 1 !important;
+    white-space: nowrap !important;
 }
 
 #yt-ryd-ratio-bar {

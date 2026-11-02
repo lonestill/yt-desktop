@@ -278,51 +278,19 @@
     };
 
     // 6. Return YouTube Dislike DOM Injection
-    function getDislikeButton() {
-        // 1. Direct standard class / custom element
-        const vm = document.querySelector('dislike-button-view-model');
-        if (vm) {
-            const btn = vm.querySelector('button');
-            if (btn) return btn;
-        }
-
-        // 2. Segmented dislike button ID
-        const seg = document.querySelector('#segmented-dislike-button button, segmented-like-dislike-button-view-model dislike-button-view-model button');
-        if (seg) return seg;
-
-        // 3. Segmented-end class
-        const segEnd = document.querySelector('.yt-spec-button-shape-next--segmented-end');
-        if (segEnd) return segEnd;
-
-        // 4. Renderer last child
-        const renderer = document.querySelector('ytd-segmented-like-dislike-button-renderer');
-        if (renderer) {
-            const btns = renderer.querySelectorAll('button');
-            if (btns.length >= 2) return btns[btns.length - 1];
-        }
-
-        // 5. Semantic aria-label fallback (Russian & English)
-        const ariaBtn = document.querySelector('button[aria-label*="не нравится" i], button[aria-label*="dislike" i]');
-        if (ariaBtn) return ariaBtn;
-
-        return null;
-    }
-
-    function getLikeButton() {
-        const vm = document.querySelector('like-button-view-model');
-        if (vm) {
-            const btn = vm.querySelector('button');
-            if (btn) return btn;
-        }
-        const container = document.querySelector('segmented-like-dislike-button-view-model, ytd-segmented-like-dislike-button-renderer');
-        if (container) {
-            const btn = container.querySelector('button');
-            if (btn) return btn;
-        }
-        const ariaBtn = document.querySelector('button[aria-label*="нравится" i]:not([aria-label*="не нравится" i]), button[aria-label*="like" i]:not([aria-label*="dislike" i])');
-        if (ariaBtn) return ariaBtn;
-
-        return null;
+    function getDislikeButtons() {
+        const candidates = Array.from(document.querySelectorAll(
+            'segmented-like-dislike-button-view-model dislike-button-view-model button, ' +
+            'ytd-segmented-like-dislike-button-renderer dislike-button-view-model button, ' +
+            '#segmented-dislike-button button, ' +
+            'dislike-button-view-model button, ' +
+            '.yt-spec-button-shape-next--segmented-end, ' +
+            'button[aria-label*="не нравится" i], ' +
+            'button[aria-label*="dislike" i]'
+        ));
+        // Exclude 0-width hidden/dead buttons when visible candidates exist
+        const visible = candidates.filter(b => b.offsetWidth > 0 || b.offsetHeight > 0 || b.getClientRects().length > 0);
+        return visible.length > 0 ? visible : candidates;
     }
 
     function applyDislikes() {
@@ -338,49 +306,57 @@
             const likes = meta.dislikes.likes;
             if (dislikes === undefined || dislikes === null) return;
 
-            const dislikeBtn = getDislikeButton();
-            if (dislikeBtn) {
+            const dislikeButtons = getDislikeButtons();
+            for (const dislikeBtn of dislikeButtons) {
                 let label = dislikeBtn.querySelector('.yt-ryd-label');
                 if (!label) {
-                    const likeBtn = getLikeButton();
-                    const likeText = likeBtn ? likeBtn.querySelector('.yt-spec-button-shape-next__button-text-content') : null;
-
-                    if (likeText) {
-                        label = likeText.cloneNode(false);
-                        label.className = likeText.className + ' yt-ryd-label';
-                    } else {
-                        label = document.createElement('div');
-                        label.className = 'yt-spec-button-shape-next__button-text-content yt-ryd-label';
-                    }
-
+                    label = document.createElement('div');
+                    label.className = 'yt-spec-button-shape-next__button-text-content ytSpecButtonShapeNextButtonTextContent yt-ryd-label';
                     const span = document.createElement('span');
                     span.setAttribute('role', 'text');
                     span.textContent = formatCount(dislikes);
                     label.replaceChildren(span);
 
-                    // Safe insertion: only use insertBefore if feedback is an IMMEDIATE child
-                    const feedback = dislikeBtn.querySelector('yt-touch-feedback-shape');
-                    if (feedback && feedback.parentNode === dislikeBtn) {
-                        dislikeBtn.insertBefore(label, feedback);
+                    const icon = dislikeBtn.querySelector('.yt-spec-button-shape-next__icon, yt-icon, svg')?.closest('div') || dislikeBtn.firstElementChild;
+                    if (icon && icon.nextSibling) {
+                        dislikeBtn.insertBefore(label, icon.nextSibling);
                     } else {
                         dislikeBtn.appendChild(label);
                     }
-                    console.log(`[RYD-DISLIKE] ✅ Injected dislike count (${formatCount(dislikes)}) into dislike button`);
+                    console.log(`[RYD-DISLIKE] ✅ Injected dislike count (${formatCount(dislikes)}) into visible button (w=${dislikeBtn.offsetWidth})`);
                 } else {
-                    const span = label.querySelector('span');
+                    const span = label.querySelector('span') || label;
                     const text = formatCount(dislikes);
-                    if (span && span.textContent !== text) {
+                    if (span.textContent !== text) {
                         span.textContent = text;
-                    } else if (!span && label.textContent !== text) {
-                        label.textContent = text;
                     }
                 }
 
-                dislikeBtn.classList.remove('yt-spec-button-shape-next--icon-only');
-                dislikeBtn.classList.add('yt-spec-button-shape-next--icon-leading');
+                dislikeBtn.classList.remove(
+                    'yt-spec-button-shape-next--icon-only',
+                    'ytSpecButtonShapeNextIconOnly',
+                    'yt-spec-button-shape-next--icon-button',
+                    'ytSpecButtonShapeNextIconButton'
+                );
+                dislikeBtn.classList.add(
+                    'yt-spec-button-shape-next--icon-leading',
+                    'ytSpecButtonShapeNextIconLeading'
+                );
+
                 dislikeBtn.style.setProperty('width', 'auto', 'important');
                 dislikeBtn.style.setProperty('min-width', '52px', 'important');
+                dislikeBtn.style.setProperty('padding-right', '14px', 'important');
                 dislikeBtn.style.setProperty('overflow', 'visible', 'important');
+                dislikeBtn.style.setProperty('display', 'inline-flex', 'important');
+
+                // Expand parent view-model wrappers
+                let p = dislikeBtn.parentElement;
+                while (p && p.tagName !== 'SEGMENTED-LIKE-DISLIKE-BUTTON-VIEW-MODEL' && p.tagName !== 'YTD-SEGMENTED-LIKE-DISLIKE-BUTTON-RENDERER' && p !== document.body) {
+                    p.style.setProperty('width', 'auto', 'important');
+                    p.style.setProperty('min-width', '52px', 'important');
+                    p.style.setProperty('overflow', 'visible', 'important');
+                    p = p.parentElement;
+                }
             }
 
             // Ratio Bar under like/dislike segmented container
