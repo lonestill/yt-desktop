@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use std::fs;
 use std::net::TcpListener;
 use std::path::PathBuf;
 use std::process::Command;
@@ -18,7 +17,7 @@ pub fn get_available_strategies() -> Vec<StrategyPreset> {
         StrategyPreset {
             id: "rostelecom".to_string(),
             name: "Ростелеком / Дом.ру".to_string(),
-            isp_hint: "midsld + disorder=tls (проверено на ТСПУ Ростелеком)".to_string(),
+            isp_hint: "midsld + disorder=tls (лучший под ТСПУ Ростелеком)".to_string(),
             args: vec![
                 "--split-pos=midsld".to_string(),
                 "--disorder=tls".to_string(),
@@ -69,47 +68,6 @@ pub fn get_available_strategies() -> Vec<StrategyPreset> {
     ]
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DpiSettings {
-    pub selected_strategy: String, // "auto" or preset id
-    pub active_strategy: String,   // actual preset id running
-    pub last_latency_ms: Option<u64>,
-}
-
-impl Default for DpiSettings {
-    fn default() -> Self {
-        Self {
-            selected_strategy: "auto".to_string(),
-            active_strategy: "rostelecom".to_string(),
-            last_latency_ms: None,
-        }
-    }
-}
-
-pub fn get_settings_path() -> PathBuf {
-    let mut dir = dirs::config_dir().unwrap_or_else(|| PathBuf::from("."));
-    dir.push("yt-desktop");
-    let _ = fs::create_dir_all(&dir);
-    dir.join("dpi_settings.json")
-}
-
-pub fn load_dpi_settings() -> DpiSettings {
-    let path = get_settings_path();
-    if let Ok(data) = fs::read_to_string(&path) {
-        if let Ok(settings) = serde_json::from_str(&data) {
-            return settings;
-        }
-    }
-    DpiSettings::default()
-}
-
-pub fn save_dpi_settings(settings: &DpiSettings) {
-    let path = get_settings_path();
-    if let Ok(json) = serde_json::to_string_pretty(settings) {
-        let _ = fs::write(path, json);
-    }
-}
-
 #[derive(Debug, Clone, Serialize)]
 pub struct BenchmarkResult {
     pub strategy_id: String,
@@ -121,7 +79,6 @@ pub struct BenchmarkResult {
 
 /// Tests a specific strategy against https://www.youtube.com using a temporary tpws instance
 pub fn probe_strategy(tpws_bin: &PathBuf, preset: &StrategyPreset) -> BenchmarkResult {
-    // 1. Bind ephemeral port
     let test_port = match TcpListener::bind("127.0.0.1:0") {
         Ok(l) => match l.local_addr() {
             Ok(a) => a.port(),
@@ -146,7 +103,6 @@ pub fn probe_strategy(tpws_bin: &PathBuf, preset: &StrategyPreset) -> BenchmarkR
         }
     };
 
-    // 2. Launch test tpws
     let mut cmd = Command::new(tpws_bin);
     cmd.args([
         "--socks",
@@ -170,10 +126,8 @@ pub fn probe_strategy(tpws_bin: &PathBuf, preset: &StrategyPreset) -> BenchmarkR
         }
     };
 
-    // Wait for tpws to bind
     std::thread::sleep(Duration::from_millis(100));
 
-    // 3. Curl check
     let start = Instant::now();
     let curl_output = Command::new("curl")
         .args([

@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Настройки</title>
+    <style>
+        :root {
+            --bg-window: #1e1e1e;
+            --bg-sidebar: #171717;
+            --bg-card: rgba(255, 255, 255, 0.05);
+            --bg-card-hover: rgba(255, 255, 255, 0.08);
+            --bg-card-active: rgba(255, 255, 255, 0.12);
+            --border: rgba(255, 255, 255, 0.1);
+            --border-active: rgba(255, 255, 255, 0.25);
+            --text-main: #f0f0f0;
+            --text-muted: #8e8e93;
+            --accent: #ff3b30;
+            --accent-green: #34c759;
+            --accent-blue: #0a84ff;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+            background: var(--bg-window);
+            color: var(--text-main);
+            height: 100vh;
+            display: flex;
+            overflow: hidden;
+            font-size: 13px;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 175px;
+            background: var(--bg-sidebar);
+            border-right: 1px solid var(--border);
+            padding: 16px 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .app-title {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            padding: 0 10px 12px 10px;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 8px;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 10px;
+            border-radius: 6px;
+            font-weight: 500;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .nav-item:hover {
+            color: var(--text-main);
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        .nav-item.active {
+            color: #fff;
+            background: rgba(255, 255, 255, 0.12);
+        }
+
+        /* Content Area */
+        .content {
+            flex: 1;
+            padding: 22px 26px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        .tab-pane {
+            display: none;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .tab-pane.active {
+            display: flex;
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .section-title {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        /* Status Banner */
+        .status-banner {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px 14px;
+        }
+
+        .status-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent-green);
+            box-shadow: 0 0 6px var(--accent-green);
+        }
+
+        .dot.busy {
+            background: #ff9500;
+            box-shadow: 0 0 6px #ff9500;
+            animation: pulse 1s infinite alternate;
+        }
+
+        @keyframes pulse { from { opacity: 0.4; } to { opacity: 1; } }
+
+        .status-label {
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .status-sub {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        .btn-action {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid var(--border);
+            color: #fff;
+            font-size: 12px;
+            font-weight: 500;
+            padding: 7px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.12s ease;
+        }
+
+        .btn-action:hover {
+            background: rgba(255, 255, 255, 0.18);
+            border-color: var(--border-active);
+        }
+
+        .btn-action:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Cards & Radio Items */
+        .card-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .strategy-card {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 7px;
+            padding: 10px 12px;
+            cursor: pointer;
+            transition: all 0.12s ease;
+        }
+
+        .strategy-card:hover {
+            background: var(--bg-card-hover);
+        }
+
+        .strategy-card.selected {
+            background: rgba(10, 132, 255, 0.12);
+            border-color: rgba(10, 132, 255, 0.4);
+        }
+
+        .strat-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .strat-name {
+            font-size: 13px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .strat-hint {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        .badge-tag {
+            font-size: 11px;
+            padding: 2px 7px;
+            border-radius: 5px;
+            font-weight: 500;
+            background: rgba(255, 255, 255, 0.08);
+            color: #aaa;
+        }
+
+        .badge-tag.fast {
+            background: rgba(52, 199, 89, 0.2);
+            color: #4ade80;
+        }
+
+        .badge-tag.fail {
+            background: rgba(255, 59, 48, 0.2);
+            color: #f87171;
+        }
+
+        /* Toggle Rows */
+        .setting-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 7px;
+            padding: 12px 14px;
+        }
+
+        .setting-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .setting-title {
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .setting-desc {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        /* iOS-style Switch */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 40px;
+            height: 22px;
+            flex-shrink: 0;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(255, 255, 255, 0.2);
+            transition: .2s;
+            border-radius: 22px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 2px;
+            bottom: 2px;
+            background-color: white;
+            transition: .2s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: var(--accent-green);
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(18px);
+        }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 14px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #2c2c2e;
+            border: 1px solid var(--border-active);
+            color: #fff;
+            padding: 7px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+            display: none;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <div class="app-title">YouTube App</div>
+        <div class="nav-item active" data-tab="dpi">⚡ Сеть & DPI</div>
+        <div class="nav-item" data-tab="content">🛡️ Контент & Плеер</div>
+        <div class="nav-item" data-tab="about">⚙️ О программе</div>
+    </div>
+
+    <div class="content">
+        <!-- TAB 1: DPI & Network -->
+        <div class="tab-pane active" id="tab-dpi">
+            <div class="section-header">
+                <div class="section-title">Обход блокировок ТСПУ</div>
+            </div>
+
+            <div class="status-banner">
+                <div class="status-left">
+                    <span class="dot" id="status-dot"></span>
+                    <div>
+                        <div class="status-label" id="status-headline">Подключено (Ростелеком)</div>
+                        <div class="status-sub" id="status-details">Прокси: 127.0.0.1:0 • Задержка: ~0ms</div>
+                    </div>
+                </div>
+                <button class="btn-action" id="btn-run-benchmark">🚀 Запустить Benchmark</button>
+            </div>
+
+            <div class="card-list" id="strategy-list">
+                <!-- Injected dynamically -->
+            </div>
+        </div>
+
+        <!-- TAB 2: Content & AdBlock -->
+        <div class="tab-pane" id="tab-content">
+            <div class="section-header">
+                <div class="section-title">Фильтрация и функции плеера</div>
+            </div>
+
+            <div class="card-list">
+                <div class="setting-row">
+                    <div class="setting-info">
+                        <div class="setting-title">Блокировка рекламы</div>
+                        <div class="setting-desc">Убирает пре-роллы, мид-роллы, баннеры и плашки спонсоров</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="toggle-block-ads">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div class="setting-row">
+                    <div class="setting-info">
+                        <div class="setting-title">Вырезать YouTube Shorts</div>
+                        <div class="setting-desc">Полностью скрывает раздел Shorts из фида, поиска и навигации</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="toggle-block-shorts">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div class="setting-row">
+                    <div class="setting-info">
+                        <div class="setting-title">Авто-подтверждение «Вы ещё смотрите?»</div>
+                        <div class="setting-desc">Автоматически закрывает диалоги подтверждения при долгом просмотре</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="toggle-auto-confirm">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div class="setting-row">
+                    <div class="setting-info">
+                        <div class="setting-title">Кнопка Picture-in-Picture (Cmd+Shift+P)</div>
+                        <div class="setting-desc">Встраивает кнопку режима «Картинка в картинке» в плеер</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="toggle-pip">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 3: About -->
+        <div class="tab-pane" id="tab-about">
+            <div class="section-header">
+                <div class="section-title">О приложении</div>
+            </div>
+
+            <div class="card-list">
+                <div class="setting-row">
+                    <div class="setting-info">
+                        <div class="setting-title">YouTube Desktop</div>
+                        <div class="setting-desc">Версия 0.1.0 • Сборка arm64/x86_64 Darwin</div>
+                    </div>
+                    <span class="badge-tag">v0.1.0</span>
+                </div>
+
+                <div class="setting-row">
+                    <div class="setting-info">
+                        <div class="setting-title">Движок обхода DPI</div>
+                        <div class="setting-desc">Zapret TPWS с системным биндом Darwin IP_BOUND_IF (en0) в обход VPN</div>
+                    </div>
+                    <span class="badge-tag fast">en0</span>
+                </div>
+
+                <div class="setting-row">
+                    <div class="setting-info">
+                        <div class="setting-title">Конфигурация и профили</div>
+                        <div class="setting-desc">~/Library/Application Support/yt-desktop/config.json</div>
+                    </div>
+                    <button class="btn-action" id="btn-open-config-folder">Открыть папку</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast">Настройки сохранены</div>
+
+    <script>
+        let currentConfig = null;
+        let dpiStatus = null;
+        let benchResults = {};
+        let isBenchmarking = false;
+
+        // Tabs
+        document.querySelectorAll('.nav-item').forEach(el => {
+            el.addEventListener('click', () => {
+                document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+                document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+                el.classList.add('active');
+                const tabId = el.getAttribute('data-tab');
+                document.getElementById(`tab-${tabId}`).classList.add('active');
+            });
+        });
+
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.style.display = 'block';
+            clearTimeout(t._timer);
+            t._timer = setTimeout(() => t.style.display = 'none', 2500);
+        }
+
+        function renderStrategies() {
+            const list = document.getElementById('strategy-list');
+            if (!list || !dpiStatus) return;
+
+            const presets = dpiStatus.presets || [];
+            const isAuto = currentConfig.selected_strategy === 'auto';
+
+            let html = `
+                <div class="strategy-card ${isAuto ? 'selected' : ''}" data-id="auto">
+                    <div class="strat-info">
+                        <div class="strat-name">⚡ Авто-подбор (Рекомендуется)</div>
+                        <div class="strat-hint">Автоматически тестирует и выбирает быстрейший вариант</div>
+                    </div>
+                    ${isAuto ? `<span class="badge-tag fast">Активно (${dpiStatus.active_strategy})</span>` : ''}
+                </div>
+            `;
+
+            for (const p of presets) {
+                const isSelected = !isAuto && currentConfig.selected_strategy === p.id;
+                const bench = benchResults[p.id];
+                let tag = '';
+                if (bench) {
+                    tag = bench.success 
+                        ? `<span class="badge-tag fast">${bench.latency_ms}ms</span>` 
+                        : `<span class="badge-tag fail">${bench.error || 'Блок'}</span>`;
+                } else if (isSelected) {
+                    tag = `<span class="badge-tag">Активно</span>`;
+                }
+
+                html += `
+                    <div class="strategy-card ${isSelected ? 'selected' : ''}" data-id="${p.id}">
+                        <div class="strat-info">
+                            <div class="strat-name">${p.name}</div>
+                            <div class="strat-hint">${p.isp_hint}</div>
+                        </div>
+                        ${tag}
+                    </div>
+                `;
+            }
+
+            list.innerHTML = html;
+
+            list.querySelectorAll('.strategy-card').forEach(card => {
+                card.addEventListener('click', () => {
+                    const id = card.getAttribute('data-id');
+                    if (!id) return;
+                    currentConfig.selected_strategy = id;
+                    saveConfigAndNotify();
+                    if (window.ipc) {
+                        window.ipc.postMessage(JSON.stringify({ type: 'set_dpi_strategy', strategy_id: id }));
+                    }
+                    showToast(`Выбрана стратегия: ${id}`);
+                });
+            });
+        }
+
+        function updateUiFromState() {
+            if (!currentConfig || !dpiStatus) return;
+
+            // Status banner
+            const activeName = (dpiStatus.presets || []).find(p => p.id === dpiStatus.active_strategy)?.name || dpiStatus.active_strategy;
+            document.getElementById('status-headline').textContent = isBenchmarking
+                ? 'Идёт бенчмарк стратегий...'
+                : `Активно: ${activeName}`;
+            
+            const lat = dpiStatus.last_latency_ms ? `${dpiStatus.last_latency_ms}ms` : 'online';
+            document.getElementById('status-details').textContent = `SOCKS5: 127.0.0.1:${dpiStatus.port} • Пинг: ${lat}`;
+
+            const dot = document.getElementById('status-dot');
+            dot.className = isBenchmarking ? 'dot busy' : 'dot';
+
+            // Toggles
+            document.getElementById('toggle-block-ads').checked = currentConfig.block_ads;
+            document.getElementById('toggle-block-shorts').checked = currentConfig.block_shorts;
+            document.getElementById('toggle-auto-confirm').checked = currentConfig.auto_confirm_watching;
+            document.getElementById('toggle-pip').checked = currentConfig.enable_pip;
+
+            renderStrategies();
+        }
+
+        function saveConfigAndNotify() {
+            if (!currentConfig) return;
+            currentConfig.block_ads = document.getElementById('toggle-block-ads').checked;
+            currentConfig.block_shorts = document.getElementById('toggle-block-shorts').checked;
+            currentConfig.auto_confirm_watching = document.getElementById('toggle-auto-confirm').checked;
+            currentConfig.enable_pip = document.getElementById('toggle-pip').checked;
+
+            if (window.ipc) {
+                window.ipc.postMessage(JSON.stringify({
+                    type: 'save_config',
+                    config: currentConfig
+                }));
+            }
+        }
+
+        // Toggle handlers
+        ['toggle-block-ads', 'toggle-block-shorts', 'toggle-auto-confirm', 'toggle-pip'].forEach(id => {
+            document.getElementById(id)?.addEventListener('change', () => {
+                saveConfigAndNotify();
+                showToast('Настройки обновлены');
+            });
+        });
+
+        // Benchmark trigger
+        document.getElementById('btn-run-benchmark')?.addEventListener('click', () => {
+            if (isBenchmarking) return;
+            isBenchmarking = true;
+            document.getElementById('btn-run-benchmark').disabled = true;
+            document.getElementById('btn-run-benchmark').textContent = '⏳ Тестирование...';
+            updateUiFromState();
+            if (window.ipc) {
+                window.ipc.postMessage(JSON.stringify({ type: 'run_dpi_benchmark' }));
+            }
+        });
+
+        document.getElementById('btn-open-config-folder')?.addEventListener('click', () => {
+            if (window.ipc) {
+                window.ipc.postMessage(JSON.stringify({ type: 'open_config_folder' }));
+            }
+        });
+
+        // Keyboard navigation
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' || (e.metaKey && e.key === 'w')) {
+                e.preventDefault();
+                if (window.ipc) {
+                    window.ipc.postMessage(JSON.stringify({ type: 'close_settings' }));
+                }
+            }
+        });
+
+        // Rust callbacks
+        window.__onConfigLoaded = function(config, status) {
+            currentConfig = config;
+            dpiStatus = status;
+            updateUiFromState();
+        };
+
+        window.__onBenchmarkDone = function(results, status) {
+            isBenchmarking = false;
+            document.getElementById('btn-run-benchmark').disabled = false;
+            document.getElementById('btn-run-benchmark').textContent = '🚀 Запустить Benchmark';
+            dpiStatus = status;
+            benchResults = {};
+            for (const r of results) {
+                benchResults[r.strategy_id] = r;
+            }
+            updateUiFromState();
+            showToast('Бенчмарк завершён!');
+        };
+
+        // Initial request
+        if (window.ipc) {
+            window.ipc.postMessage(JSON.stringify({ type: 'get_settings_state' }));
+        }
+    </script>
+</body>
+</html>

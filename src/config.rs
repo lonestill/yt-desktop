@@ -1,0 +1,63 @@
+use serde::{Deserialize, Serialize};
+use std::fs;
+use std::path::PathBuf;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AppConfig {
+    // DPI Settings
+    pub selected_strategy: String, // "auto" or preset id or "custom"
+    pub active_strategy: String,
+    pub custom_tpws_args: String,
+    pub last_latency_ms: Option<u64>,
+
+    // Content Settings
+    pub block_ads: bool,
+    pub block_shorts: bool,
+    pub auto_confirm_watching: bool,
+    pub enable_pip: bool,
+}
+
+impl Default for AppConfig {
+    fn default() -> Self {
+        Self {
+            selected_strategy: "auto".to_string(),
+            active_strategy: "rostelecom".to_string(),
+            custom_tpws_args: "".to_string(),
+            last_latency_ms: None,
+            block_ads: true,
+            block_shorts: true,
+            auto_confirm_watching: true,
+            enable_pip: true,
+        }
+    }
+}
+
+pub fn get_config_dir() -> PathBuf {
+    let mut dir = dirs::config_dir().unwrap_or_else(|| PathBuf::from("."));
+    dir.push("yt-desktop");
+    let _ = fs::create_dir_all(&dir);
+    dir
+}
+
+pub fn get_config_path() -> PathBuf {
+    get_config_dir().join("config.json")
+}
+
+pub fn load_config() -> AppConfig {
+    let path = get_config_path();
+    if let Ok(data) = fs::read_to_string(&path) {
+        if let Ok(cfg) = serde_json::from_str(&data) {
+            return cfg;
+        }
+    }
+    let default_cfg = AppConfig::default();
+    save_config(&default_cfg);
+    default_cfg
+}
+
+pub fn save_config(config: &AppConfig) {
+    let path = get_config_path();
+    if let Ok(json) = serde_json::to_string_pretty(config) {
+        let _ = fs::write(path, json);
+    }
+}
