@@ -614,7 +614,11 @@
 
     // 12. Apple-Grade Glass Control Center HUD & Pill
     function renderGlassPill() {
-        if (!document.body) return;
+        const mastheadButtons = document.querySelector('#masthead #end #buttons') ||
+                                document.querySelector('ytd-masthead #end #buttons') ||
+                                document.querySelector('#masthead #end') ||
+                                document.querySelector('ytd-masthead #end');
+
         let pill = document.getElementById('yt-desktop-pill');
         if (!pill) {
             pill = document.createElement('div');
@@ -651,10 +655,34 @@
                 e.stopPropagation();
                 window.__toggleHud();
             });
+        }
 
+        if (mastheadButtons) {
+            if (pill.parentElement !== mastheadButtons) {
+                mastheadButtons.insertBefore(pill, mastheadButtons.firstChild);
+            }
+        } else if (document.body && pill.parentElement !== document.body) {
             document.body.appendChild(pill);
         }
     }
+
+    function positionHud() {
+        const pill = document.getElementById('yt-desktop-pill');
+        const hud = document.getElementById('yt-desktop-hud');
+        if (!pill || !hud) return;
+        const rect = pill.getBoundingClientRect();
+        hud.style.setProperty('top', `${Math.max(12, Math.round(rect.bottom + 8))}px`, 'important');
+        const rightOffset = Math.max(16, Math.round(window.innerWidth - rect.right));
+        hud.style.setProperty('right', `${rightOffset}px`, 'important');
+        hud.style.setProperty('left', 'auto', 'important');
+    }
+
+    window.addEventListener('resize', () => {
+        const hud = document.getElementById('yt-desktop-hud');
+        if (hud && hud.classList.contains('open')) {
+            positionHud();
+        }
+    });
 
     function updateActiveStrategyChip(activeId) {
         const chips = document.querySelectorAll('.yt-strat-chip');
@@ -863,6 +891,7 @@
         if (hud) {
             hud.classList.toggle('open');
             if (hud.classList.contains('open')) {
+                positionHud();
                 postIpc({ type: 'get_hud_state' });
             }
         }
@@ -872,6 +901,10 @@
         try {
             renderGlassPill();
             renderControlCenterHud();
+            const hud = document.getElementById('yt-desktop-hud');
+            if (hud && hud.classList.contains('open')) {
+                positionHud();
+            }
 
             if (cfg) {
                 window.__applyConfig(cfg);
