@@ -67,4 +67,7 @@ cat << 'EOF' > "$CONTENTS/Info.plist"
 </plist>
 EOF
 
+echo "[*] Signing app bundle..."
+codesign --force --deep -s - "$APP_DIR"
+
 echo "[*] YouTube.app successfully built at $APP_DIR"

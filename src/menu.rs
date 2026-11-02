@@ -3,24 +3,22 @@ use muda::{
     CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu,
 };
 
-#[allow(dead_code)]
 pub struct AppMenu {
+    #[allow(dead_code)]
     pub menu: Menu,
-    pub prefs_id: String,
-    pub benchmark_id: String,
-    pub auto_id: String,
-    pub rostelecom_id: String,
-    pub mts_id: String,
-    pub beeline_id: String,
-    pub tlsrec_id: String,
-    pub direct_id: String,
+    pub auto_item: CheckMenuItem,
+    pub rostelecom_item: CheckMenuItem,
+    pub mts_item: CheckMenuItem,
+    pub beeline_item: CheckMenuItem,
+    pub tlsrec_item: CheckMenuItem,
+    pub direct_item: CheckMenuItem,
 }
 
 impl AppMenu {
     pub fn init() -> Result<Self, Box<dyn std::error::Error>> {
         let menu = Menu::new();
 
-        // 1. App Menu
+        // 1. App Menu (YouTube)
         let app_menu = Submenu::new("YouTube", true);
         let prefs_item = MenuItem::with_id(
             "app.preferences",
@@ -32,17 +30,19 @@ impl AppMenu {
         app_menu.append(&PredefinedMenuItem::separator())?;
         app_menu.append(&prefs_item)?;
         app_menu.append(&PredefinedMenuItem::separator())?;
+        app_menu.append(&PredefinedMenuItem::services(None))?;
+        app_menu.append(&PredefinedMenuItem::separator())?;
         app_menu.append(&PredefinedMenuItem::hide(Some("Скрыть YouTube")))?;
         app_menu.append(&PredefinedMenuItem::hide_others(Some("Скрыть остальные")))?;
         app_menu.append(&PredefinedMenuItem::show_all(Some("Показать все")))?;
         app_menu.append(&PredefinedMenuItem::separator())?;
         app_menu.append(&PredefinedMenuItem::quit(Some("Завершить YouTube")))?;
 
-        // 2. Anti-DPI Menu
+        // 2. Anti-DPI Menu (In the top bar between YouTube and Правка)
         let dpi_menu = Submenu::new("Anti-DPI", true);
         let bench_item = MenuItem::with_id(
             "dpi.benchmark",
-            "🚀 Авто-подбор (Benchmark)",
+            "🚀 Проверить сеть (Benchmark)",
             true,
             Some(Accelerator::new(Modifiers::META | Modifiers::SHIFT, Code::KeyB)),
         );
@@ -53,8 +53,8 @@ impl AppMenu {
         let rostelecom_item = CheckMenuItem::with_id("dpi.strategy.rostelecom", "Ростелеком / Дом.ру", true, false, None);
         let mts_item = CheckMenuItem::with_id("dpi.strategy.mts_megafon", "МТС / Мегафон / Yota", true, false, None);
         let beeline_item = CheckMenuItem::with_id("dpi.strategy.beeline_mgts", "Билайн / МГТС / Теле2", true, false, None);
-        let tlsrec_item = CheckMenuItem::with_id("dpi.strategy.tlsrec_midsld", "TLS Record (SLD Split)", true, false, None);
-        let direct_item = CheckMenuItem::with_id("dpi.strategy.direct", "Прямое подключение (Direct)", true, false, None);
+        let tlsrec_item = CheckMenuItem::with_id("dpi.strategy.tlsrec_midsld", "TLS Record (SLD)", true, false, None);
+        let direct_item = CheckMenuItem::with_id("dpi.strategy.direct", "Прямое подключение", true, false, None);
 
         dpi_menu.append(&auto_item)?;
         dpi_menu.append(&rostelecom_item)?;
@@ -63,7 +63,7 @@ impl AppMenu {
         dpi_menu.append(&tlsrec_item)?;
         dpi_menu.append(&direct_item)?;
 
-        // 3. Edit Menu (Copy/Paste/Undo in webview inputs)
+        // 3. Edit Menu (Правка - for input Copy/Paste/Undo)
         let edit_menu = Submenu::new("Правка", true);
         edit_menu.append(&PredefinedMenuItem::undo(Some("Отменить")))?;
         edit_menu.append(&PredefinedMenuItem::redo(Some("Повторить")))?;
@@ -73,7 +73,7 @@ impl AppMenu {
         edit_menu.append(&PredefinedMenuItem::paste(Some("Вставить")))?;
         edit_menu.append(&PredefinedMenuItem::select_all(Some("Выбрать всё")))?;
 
-        // 4. View Menu
+        // 4. View Menu (Вид)
         let view_menu = Submenu::new("Вид", true);
         view_menu.append(&MenuItem::with_id(
             "view.reload",
@@ -84,7 +84,7 @@ impl AppMenu {
         view_menu.append(&PredefinedMenuItem::separator())?;
         view_menu.append(&PredefinedMenuItem::fullscreen(Some("Полноэкранный режим")))?;
 
-        // 5. Window Menu
+        // 5. Window Menu (Окно)
         let window_menu = Submenu::new("Окно", true);
         window_menu.append(&PredefinedMenuItem::minimize(Some("Убрать в Dock")))?;
         window_menu.append(&PredefinedMenuItem::close_window(Some("Закрыть окно")))?;
@@ -98,20 +98,24 @@ impl AppMenu {
         #[cfg(target_os = "macos")]
         menu.init_for_nsapp();
 
-        muda::MenuEvent::set_event_handler(Some(|event: muda::MenuEvent| {
-            println!("Menu event: {}", event.id().as_ref());
-        }));
-
         Ok(Self {
             menu,
-            prefs_id: "app.preferences".to_string(),
-            benchmark_id: "dpi.benchmark".to_string(),
-            auto_id: "dpi.strategy.auto".to_string(),
-            rostelecom_id: "dpi.strategy.rostelecom".to_string(),
-            mts_id: "dpi.strategy.mts_megafon".to_string(),
-            beeline_id: "dpi.strategy.beeline_mgts".to_string(),
-            tlsrec_id: "dpi.strategy.tlsrec_midsld".to_string(),
-            direct_id: "dpi.strategy.direct".to_string(),
+            auto_item,
+            rostelecom_item,
+            mts_item,
+            beeline_item,
+            tlsrec_item,
+            direct_item,
         })
+    }
+
+    pub fn update_active_strategy(&self, active_id: &str) {
+        let is_auto = active_id == "auto";
+        self.auto_item.set_checked(is_auto);
+        self.rostelecom_item.set_checked(active_id == "rostelecom");
+        self.mts_item.set_checked(active_id == "mts_megafon");
+        self.beeline_item.set_checked(active_id == "beeline_mgts");
+        self.tlsrec_item.set_checked(active_id == "tlsrec_midsld");
+        self.direct_item.set_checked(active_id == "direct");
     }
 }
