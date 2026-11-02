@@ -32,6 +32,8 @@ enum MainIpcMessage {
     Log { level: String, message: String },
     #[serde(rename = "open_settings")]
     OpenSettings,
+    #[serde(rename = "fetch_video_meta")]
+    FetchVideoMeta { video_id: String },
 }
 
 #[derive(Debug, Deserialize)]
@@ -60,6 +62,11 @@ enum AppEvent {
     UpdateSettingsUi(serde_json::Value, serde_json::Value),
     BenchmarkDone(Vec<BenchmarkResult>, serde_json::Value),
     ApplyConfigToMain(serde_json::Value),
+    VideoMetaLoaded {
+        video_id: String,
+        dislikes: serde_json::Value,
+        segments: serde_json::Value,
+    },
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -209,6 +216,40 @@ fn main() {
                     }
                     MainIpcMessage::OpenSettings => {
                         let _ = main_ipc_proxy.send_event(AppEvent::OpenSettings);
+                    }
+                    MainIpcMessage::FetchVideoMeta { video_id } => {
+                        let p = main_ipc_proxy.clone();
+                        thread::spawn(move || {
+                            let dislikes_out = std::process::Command::new("curl")
+                                .args([
+                                    "-s",
+                                    "--connect-timeout", "3",
+                                    "--max-time", "4",
+                                    &format!("https://returnyoutubedislikeapi.com/votes?videoId={video_id}"),
+                                ])
+                                .output();
+                            let dislikes_val: serde_json::Value = dislikes_out.ok()
+                                .and_then(|o| serde_json::from_slice(&o.stdout).ok())
+                                .unwrap_or(serde_json::Value::Null);
+
+                            let sponsor_out = std::process::Command::new("curl")
+                                .args([
+                                    "-s",
+                                    "--connect-timeout", "3",
+                                    "--max-time", "4",
+                                    &format!("https://sponsor.ajay.app/api/skipSegments?videoID={video_id}&categories=%5B%22sponsor%22%2C%22selfpromo%22%2C%22interaction%22%2C%22intro%22%2C%22outro%22%5D"),
+                                ])
+                                .output();
+                            let segments_val: serde_json::Value = sponsor_out.ok()
+                                .and_then(|o| serde_json::from_slice(&o.stdout).ok())
+                                .unwrap_or_else(|| serde_json::json!([]));
+
+                            let _ = p.send_event(AppEvent::VideoMetaLoaded {
+                                video_id,
+                                dislikes: dislikes_val,
+                                segments: segments_val,
+                            });
+                        });
                     }
                 }
             }
@@ -441,6 +482,13 @@ fn main() {
             }
             Event::UserEvent(AppEvent::ApplyConfigToMain(cfg_val)) => {
                 let js = format!("if (window.__applyConfig) window.__applyConfig({});", cfg_val);
+                let _ = main_webview.evaluate_script(&js);
+            }
+            Event::UserEvent(AppEvent::VideoMetaLoaded { video_id, dislikes, segments }) => {
+                let js = format!(
+                    "if (window.__onVideoMeta) window.__onVideoMeta('{}', {}, {});",
+                    video_id, dislikes, segments
+                );
                 let _ = main_webview.evaluate_script(&js);
             }
             Event::WindowEvent {

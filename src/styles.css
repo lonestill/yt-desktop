@@ -76,66 +76,90 @@ html.yt-hide-shorts yt-chip-cloud-chip-renderer:has(yt-formatted-string[title="S
     display: none !important;
 }
 
-/* 5. SponsorBlock Segment Markers on progress bar */
+/* 5. Return YouTube Dislike Button Styling */
+dislike-button-view-model button,
+#segmented-dislike-button button,
+ytd-segmented-like-dislike-button-renderer button:last-child,
+.yt-spec-button-shape-next--segmented-end {
+    width: auto !important;
+    min-width: 52px !important;
+    padding-right: 12px !important;
+    overflow: visible !important;
+}
+
+.yt-ryd-label {
+    display: inline-block !important;
+    margin-left: 6px !important;
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    color: inherit !important;
+    vertical-align: middle !important;
+    line-height: 1 !important;
+}
+
+.yt-ryd-ratio-bar {
+    width: 100% !important;
+    height: 3px !important;
+    background: #e50914 !important;
+    border-radius: 2px !important;
+    overflow: hidden !important;
+    margin-top: 4px !important;
+    display: flex !important;
+}
+
+.yt-ryd-likes-fill {
+    height: 100% !important;
+    background: #3ea6ff !important;
+    transition: width 0.3s ease !important;
+}
+
+/* 6. SponsorBlock Progress Bar Markers */
 .yt-sb-segment {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    height: 100%;
-    background: #00d66c;
-    opacity: 0.8;
-    z-index: 35;
-    pointer-events: none;
-    border-radius: 2px;
+    position: absolute !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    height: 100% !important;
+    background: #00d66c !important;
+    opacity: 0.85 !important;
+    z-index: 40 !important;
+    pointer-events: none !important;
+    border-radius: 2px !important;
 }
 .yt-sb-segment.selfpromo {
-    background: #ffec3d;
+    background: #ffec3d !important;
 }
 .yt-sb-segment.interaction {
-    background: #d46b08;
+    background: #d46b08 !important;
+}
+.yt-sb-segment.intro, .yt-sb-segment.outro {
+    background: #0080ff !important;
 }
 
 /* SponsorBlock Toast Notice in player */
 .yt-sb-toast {
-    position: absolute;
-    bottom: 64px;
-    left: 24px;
-    background: rgba(18, 18, 18, 0.9);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    color: #fff;
-    padding: 8px 14px;
-    border-radius: 8px;
-    font-size: 13px;
-    font-weight: 500;
-    z-index: 9999;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.6);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    animation: yt-sb-fade 0.2s ease;
+    position: absolute !important;
+    bottom: 64px !important;
+    left: 24px !important;
+    background: rgba(18, 18, 18, 0.92) !important;
+    border: 1px solid rgba(255, 255, 255, 0.18) !important;
+    color: #fff !important;
+    padding: 8px 14px !important;
+    border-radius: 8px !important;
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    z-index: 99999 !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.6) !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+    animation: yt-sb-fade 0.2s ease !important;
 }
 
 @keyframes yt-sb-fade {
     from { opacity: 0; transform: translateY(4px); }
     to { opacity: 1; transform: translateY(0); }
-}
-
-/* 6. Return YouTube Dislike Ratio Bar */
-.yt-ryd-ratio-bar {
-    width: 100%;
-    height: 3px;
-    background: #e50914;
-    border-radius: 2px;
-    overflow: hidden;
-    margin-top: 4px;
-    display: flex;
-}
-.yt-ryd-likes-fill {
-    height: 100%;
-    background: #3ea6ff;
-    transition: width 0.3s ease;
 }
 
 /* 7. OLED Pure Black Theme */
