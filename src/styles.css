@@ -94,22 +94,32 @@ ytd-segmented-like-dislike-button-renderer button:last-child,
 }
 
 .yt-ryd-label {
-    display: inline-block !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
     margin-left: 6px !important;
-    font-size: 13px !important;
-    font-weight: 500 !important;
     color: inherit !important;
     vertical-align: middle !important;
+}
+
+.yt-ryd-label span {
+    font-size: 14px !important;
+    font-weight: 500 !important;
+    color: inherit !important;
     line-height: 1 !important;
 }
 
-.yt-ryd-ratio-bar {
+#yt-ryd-ratio-bar {
+    position: absolute !important;
+    bottom: -4px !important;
+    left: 0 !important;
     width: 100% !important;
     height: 3px !important;
     background: #e50914 !important;
     border-radius: 2px !important;
     overflow: hidden !important;
-    margin-top: 4px !important;
+    pointer-events: none !important;
+    z-index: 100 !important;
     display: flex !important;
 }
 
@@ -120,26 +130,35 @@ ytd-segmented-like-dislike-button-renderer button:last-child,
 }
 
 /* 6. SponsorBlock Progress Bar Markers */
+#yt-sb-previewbar {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    pointer-events: none !important;
+    overflow: visible !important;
+    z-index: 45 !important;
+}
+
 .yt-sb-segment {
     position: absolute !important;
     top: 0 !important;
     bottom: 0 !important;
     height: 100% !important;
+    min-width: 2px !important;
     background: #00d66c !important;
     opacity: 0.9 !important;
     z-index: 50 !important;
     pointer-events: none !important;
     border-radius: 1px !important;
 }
-.yt-sb-segment.selfpromo {
-    background: #ffec3d !important;
-}
-.yt-sb-segment.interaction {
-    background: #d46b08 !important;
-}
-.yt-sb-segment.intro, .yt-sb-segment.outro {
-    background: #0080ff !important;
-}
+.yt-sb-segment.sponsor { background: #00d66c !important; }
+.yt-sb-segment.selfpromo { background: #ffec3d !important; }
+.yt-sb-segment.interaction { background: #d46b08 !important; }
+.yt-sb-segment.intro, .yt-sb-segment.outro { background: #0080ff !important; }
+.yt-sb-segment.preview { background: #00d66c !important; }
+.yt-sb-segment.filler { background: #7300ff !important; }
 
 /* SponsorBlock Toast Notice in player */
 .yt-sb-toast {

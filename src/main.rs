@@ -220,29 +220,38 @@ fn main() {
                     MainIpcMessage::FetchVideoMeta { video_id } => {
                         let p = main_ipc_proxy.clone();
                         thread::spawn(move || {
-                            let dislikes_out = std::process::Command::new("curl")
+                            println!("[META-FETCH] 🔍 Requesting metadata for video_id={video_id}...");
+                            let dislikes_out = std::process::Command::new("/usr/bin/curl")
                                 .args([
                                     "-s",
-                                    "--connect-timeout", "3",
-                                    "--max-time", "4",
+                                    "-A", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 yt-desktop/0.1.0",
+                                    "--connect-timeout", "4",
+                                    "--max-time", "6",
                                     &format!("https://returnyoutubedislikeapi.com/votes?videoId={video_id}"),
                                 ])
                                 .output();
+
                             let dislikes_val: serde_json::Value = dislikes_out.ok()
                                 .and_then(|o| serde_json::from_slice(&o.stdout).ok())
                                 .unwrap_or(serde_json::Value::Null);
 
-                            let sponsor_out = std::process::Command::new("curl")
+                            let sponsor_out = std::process::Command::new("/usr/bin/curl")
                                 .args([
                                     "-s",
-                                    "--connect-timeout", "3",
-                                    "--max-time", "4",
+                                    "-A", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 yt-desktop/0.1.0",
+                                    "--connect-timeout", "4",
+                                    "--max-time", "6",
                                     &format!("https://sponsor.ajay.app/api/skipSegments?videoID={video_id}&categories=%5B%22sponsor%22%2C%22selfpromo%22%2C%22interaction%22%2C%22intro%22%2C%22outro%22%5D"),
                                 ])
                                 .output();
+
                             let segments_val: serde_json::Value = sponsor_out.ok()
                                 .and_then(|o| serde_json::from_slice(&o.stdout).ok())
                                 .unwrap_or_else(|| serde_json::json!([]));
+
+                            let d_count = dislikes_val.get("dislikes").and_then(|v| v.as_i64()).unwrap_or(-1);
+                            let s_count = segments_val.as_array().map(|a| a.len()).unwrap_or(0);
+                            println!("[META-FETCH] ✅ Results for {video_id}: dislikes={d_count}, segments={s_count}");
 
                             let _ = p.send_event(AppEvent::VideoMetaLoaded {
                                 video_id,
@@ -252,6 +261,8 @@ fn main() {
                         });
                     }
                 }
+            } else {
+                eprintln!("[MAIN-IPC] ❌ Failed to parse IPC message: {}", body);
             }
         })
         .with_url("https://www.youtube.com")
@@ -489,7 +500,10 @@ fn main() {
                     "if (window.__onVideoMeta) window.__onVideoMeta('{}', {}, {});",
                     video_id, dislikes, segments
                 );
-                let _ = main_webview.evaluate_script(&js);
+                println!("[MAIN-DELIVERY] 📨 Delivering metadata to webview for {video_id}");
+                if let Err(e) = main_webview.evaluate_script(&js) {
+                    eprintln!("[MAIN-DELIVERY] ❌ Failed to evaluate __onVideoMeta script: {e}");
+                }
             }
             Event::WindowEvent {
                 window_id,

@@ -16,7 +16,17 @@
         return false;
     }
 
-    // Forward console logs to native terminal
+    // Forward logs & uncaught errors to native terminal
+    const _log = console.log;
+    console.log = function (...args) {
+        _log.apply(console, args);
+        postIpc({
+            type: 'log',
+            level: 'INFO',
+            message: args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')
+        });
+    };
+
     const _error = console.error;
     console.error = function (...args) {
         _error.apply(console, args);
@@ -26,6 +36,14 @@
             message: args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')
         });
     };
+
+    window.addEventListener('error', function (e) {
+        postIpc({
+            type: 'log',
+            level: 'UNCAUGHT',
+            message: (e.message || String(e)) + ' at ' + (e.filename || '') + ':' + (e.lineno || 0)
+        });
+    });
 
     let userConfig = {
         block_ads: true,
@@ -79,8 +97,38 @@
     }
 
     function getActiveVideoId() {
-        const urlParams = new URLSearchParams(window.location.search);
-        return urlParams.get('v');
+        // 1. URL parameter (?v=...)
+        try {
+            const urlParams = new URLSearchParams(window.location.search);
+            const v = urlParams.get('v');
+            if (v && v.length === 11) return v;
+        } catch (_) {}
+
+        // 2. Pathname pattern (/shorts/..., /live/..., /watch/...)
+        try {
+            const match = window.location.pathname.match(/\/(shorts|live|watch)\/([a-zA-Z0-9_-]{11})/);
+            if (match && match[2]) return match[2];
+        } catch (_) {}
+
+        // 3. Flexy attribute
+        try {
+            const flexy = document.querySelector('ytd-watch-flexy');
+            if (flexy) {
+                const vid = flexy.getAttribute('video-id');
+                if (vid && vid.length === 11) return vid;
+            }
+        } catch (_) {}
+
+        // 4. Player API
+        try {
+            const player = document.getElementById('movie_player');
+            if (player && typeof player.getVideoData === 'function') {
+                const data = player.getVideoData();
+                if (data && data.video_id && data.video_id.length === 11) return data.video_id;
+            }
+        } catch (_) {}
+
+        return null;
     }
 
     // 2. Shorts Auto-Redirect
@@ -172,6 +220,7 @@
 
     // 5. Metadata Sync with Native Rust Backend
     let requestedVideoId = null;
+    let lastRequestTime = 0;
     let videoMetaCache = {};
     let lastSkippedUuid = null;
 
@@ -179,18 +228,22 @@
         const videoId = getActiveVideoId();
         if (!videoId) return;
 
-        if (videoId !== requestedVideoId && !videoMetaCache[videoId]) {
-            const ok = postIpc({
+        const cached = videoMetaCache[videoId];
+        const isPendingTooLong = (Date.now() - lastRequestTime) > 7000;
+
+        if (!cached && (videoId !== requestedVideoId || isPendingTooLong)) {
+            requestedVideoId = videoId;
+            lastRequestTime = Date.now();
+            console.log('[EXT-SYNC] 🔍 Requesting metadata for videoId: ' + videoId);
+            postIpc({
                 type: 'fetch_video_meta',
                 video_id: videoId
             });
-            if (ok) {
-                requestedVideoId = videoId;
-            }
         }
     }
 
     window.__onVideoMeta = function(videoId, dislikesData, sponsorSegments) {
+        console.log('[EXT-SYNC] 📥 Received meta for ' + videoId + ': dislikes=' + (dislikesData ? dislikesData.dislikes : 'none') + ', segments=' + (sponsorSegments ? sponsorSegments.length : 0));
         videoMetaCache[videoId] = {
             dislikes: dislikesData,
             segments: sponsorSegments || []
@@ -200,48 +253,119 @@
     };
 
     // 6. Return YouTube Dislike DOM Injection
+    function getDislikeButton() {
+        // Priority 1: Modern dislike-button-view-model
+        const vm = document.querySelector('dislike-button-view-model');
+        if (vm) {
+            const btn = vm.querySelector('button');
+            if (btn) return btn;
+        }
+        // Priority 2: segmented button
+        const seg = document.querySelector('#segmented-dislike-button button, segmented-like-dislike-button-view-model dislike-button-view-model button');
+        if (seg) return seg;
+
+        // Priority 3: segmented-end class
+        const segEnd = document.querySelector('.yt-spec-button-shape-next--segmented-end');
+        if (segEnd) return segEnd;
+
+        // Priority 4: renderer last child
+        const renderer = document.querySelector('ytd-segmented-like-dislike-button-renderer');
+        if (renderer) {
+            const btns = renderer.querySelectorAll('button');
+            if (btns.length >= 2) return btns[btns.length - 1];
+        }
+        return null;
+    }
+
+    function getLikeButton() {
+        const vm = document.querySelector('like-button-view-model');
+        if (vm) {
+            const btn = vm.querySelector('button');
+            if (btn) return btn;
+        }
+        const container = document.querySelector('segmented-like-dislike-button-view-model, ytd-segmented-like-dislike-button-renderer');
+        if (container) {
+            const btn = container.querySelector('button');
+            if (btn) return btn;
+        }
+        return null;
+    }
+
     function applyDislikes() {
         if (!userConfig.return_dislikes) return;
         const videoId = getActiveVideoId();
+        if (!videoId) return;
+
         const meta = videoMetaCache[videoId];
         if (!meta || !meta.dislikes) return;
 
         const dislikes = meta.dislikes.dislikes;
         const likes = meta.dislikes.likes;
+        if (dislikes === undefined || dislikes === null) return;
 
-        // Find dislike button in multiple possible containers
-        const dislikeBtn = document.querySelector('dislike-button-view-model button') ||
-            document.querySelector('#segmented-dislike-button button') ||
-            document.querySelector('ytd-segmented-like-dislike-button-renderer button:last-child') ||
-            document.querySelector('.yt-spec-button-shape-next--segmented-end');
-
+        const dislikeBtn = getDislikeButton();
         if (dislikeBtn) {
             let label = dislikeBtn.querySelector('.yt-ryd-label');
             if (!label) {
-                label = document.createElement('span');
-                label.className = 'yt-ryd-label';
-                dislikeBtn.appendChild(label);
+                const likeBtn = getLikeButton();
+                const likeText = likeBtn ? likeBtn.querySelector('.yt-spec-button-shape-next__button-text-content') : null;
+
+                if (likeText) {
+                    label = likeText.cloneNode(false);
+                    label.className = likeText.className + ' yt-ryd-label';
+                } else {
+                    label = document.createElement('div');
+                    label.className = 'yt-spec-button-shape-next__button-text-content yt-ryd-label';
+                }
+
+                label.innerHTML = `<span role="text">${formatCount(dislikes)}</span>`;
+
+                const feedback = dislikeBtn.querySelector('yt-touch-feedback-shape');
+                if (feedback) {
+                    dislikeBtn.insertBefore(label, feedback);
+                } else {
+                    dislikeBtn.appendChild(label);
+                }
+            } else {
+                const span = label.querySelector('span');
+                const text = formatCount(dislikes);
+                if (span && span.textContent !== text) {
+                    span.textContent = text;
+                } else if (!span && label.textContent !== text) {
+                    label.textContent = text;
+                }
             }
-            const countText = formatCount(dislikes);
-            if (label.textContent !== countText) {
-                label.textContent = countText;
-            }
+
             dislikeBtn.classList.remove('yt-spec-button-shape-next--icon-only');
+            dislikeBtn.classList.add('yt-spec-button-shape-next--icon-leading');
+            dislikeBtn.style.setProperty('width', 'auto', 'important');
+            dislikeBtn.style.setProperty('min-width', '52px', 'important');
+            dislikeBtn.style.setProperty('overflow', 'visible', 'important');
         }
 
-        // Like/Dislike Ratio Bar
-        const buttonContainer = document.querySelector('ytd-segmented-like-dislike-button-renderer') ||
+        // Ratio Bar under like/dislike segmented container
+        const buttonContainer = document.querySelector('segmented-like-dislike-button-view-model') ||
+            document.querySelector('ytd-segmented-like-dislike-button-renderer') ||
             document.querySelector('like-button-view-model')?.parentElement?.parentElement;
 
-        if (buttonContainer && !document.getElementById('yt-ryd-ratio-bar')) {
+        if (buttonContainer && (likes !== undefined && dislikes !== undefined)) {
+            buttonContainer.style.position = 'relative';
+            let bar = buttonContainer.querySelector('#yt-ryd-ratio-bar');
+            if (!bar) {
+                bar = document.createElement('div');
+                bar.id = 'yt-ryd-ratio-bar';
+                bar.className = 'yt-ryd-ratio-bar';
+                buttonContainer.appendChild(bar);
+            }
+
             const total = (likes || 0) + (dislikes || 0);
             const likePct = total > 0 ? ((likes / total) * 100).toFixed(1) : 100;
-
-            const bar = document.createElement('div');
-            bar.id = 'yt-ryd-ratio-bar';
-            bar.className = 'yt-ryd-ratio-bar';
-            bar.innerHTML = `<div class="yt-ryd-likes-fill" style="width: ${likePct}%;"></div>`;
-            buttonContainer.appendChild(bar);
+            const fill = bar.querySelector('.yt-ryd-likes-fill');
+            if (fill) {
+                fill.style.width = `${likePct}%`;
+            } else {
+                bar.innerHTML = `<div class="yt-ryd-likes-fill" style="width: ${likePct}%;"></div>`;
+            }
         }
     }
 
@@ -271,6 +395,8 @@
     function checkSponsorSkip() {
         if (!userConfig.sponsor_block) return;
         const videoId = getActiveVideoId();
+        if (!videoId) return;
+
         const meta = videoMetaCache[videoId];
         if (!meta || !meta.segments || !meta.segments.length) return;
 
@@ -285,50 +411,83 @@
                     lastSkippedUuid = seg.UUID;
                     video.currentTime = end;
                     showSponsorToast(seg.category);
+                    console.log(`[SPONSOR-BLOCK] ⏩ Auto-skipped ${seg.category} (${start.toFixed(1)}s -> ${end.toFixed(1)}s)`);
                     break;
                 }
             }
         }
     }
 
+    function getProgressBar() {
+        return document.querySelector('.ytp-progress-bar') ||
+               document.querySelector('.ytChapteredProgressBarHost') ||
+               document.querySelector('.YtProgressBarLineHost') ||
+               document.querySelector('.ytp-progress-list');
+    }
+
     function renderSponsorSegments() {
+        if (!userConfig.sponsor_block) return;
         const videoId = getActiveVideoId();
+        if (!videoId) return;
+
         const meta = videoMetaCache[videoId];
         if (!meta || !meta.segments || !meta.segments.length) return;
 
-        const progressBar = document.querySelector('.ytp-progress-bar') || document.querySelector('.ytp-progress-list');
+        const progressBar = getProgressBar();
         const video = document.querySelector('video');
-        if (!progressBar || !video || !video.duration || video.duration <= 0) return;
+        if (!progressBar || !video || !isFinite(video.duration) || video.duration <= 0) return;
 
-        const existingCount = progressBar.querySelectorAll('.yt-sb-segment').length;
-        if (existingCount === meta.segments.length) return; // already rendered
+        let container = progressBar.querySelector('#yt-sb-previewbar');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'yt-sb-previewbar';
+            progressBar.prepend(container);
+        }
 
-        progressBar.querySelectorAll('.yt-sb-segment').forEach(el => el.remove());
+        if (container.dataset.renderedVideoId === videoId && container.children.length === meta.segments.length) {
+            return;
+        }
 
+        container.innerHTML = '';
+        container.dataset.renderedVideoId = videoId;
         const duration = video.duration;
+
         for (const seg of meta.segments) {
             const [start, end] = seg.segment;
-            const leftPct = (start / duration) * 100;
-            const widthPct = ((end - start) / duration) * 100;
+            const leftPct = Math.max(0, Math.min(100, (start / duration) * 100));
+            const widthPct = Math.max(0.2, Math.min(100 - leftPct, ((end - start) / duration) * 100));
 
             const marker = document.createElement('div');
             marker.className = `yt-sb-segment ${seg.category}`;
             marker.style.left = `${leftPct}%`;
             marker.style.width = `${widthPct}%`;
-            progressBar.appendChild(marker);
+            container.appendChild(marker);
+        }
+        console.log(`[SPONSOR-BLOCK] 🎨 Rendered ${meta.segments.length} segment markers on timeline`);
+    }
+
+    function hookVideoEvents() {
+        const video = document.querySelector('video');
+        if (video && !video.__sbHooked) {
+            video.__sbHooked = true;
+            video.addEventListener('timeupdate', checkSponsorSkip);
+            video.addEventListener('durationchange', renderSponsorSegments);
+            video.addEventListener('loadedmetadata', renderSponsorSegments);
         }
     }
 
     // 8. Max Quality Enforcer
     function enforceMaxQuality() {
         if (!userConfig.max_quality) return;
-        const player = document.getElementById('movie_player');
-        if (player && typeof player.getPlaybackQuality === 'function' && typeof player.setPlaybackQualityRange === 'function') {
-            const current = player.getPlaybackQuality();
-            if (current && (current === 'tiny' || current === 'small' || current === 'medium' || current === 'large')) {
-                player.setPlaybackQualityRange('highres');
+        try {
+            const player = document.getElementById('movie_player');
+            if (player && typeof player.getPlaybackQuality === 'function' && typeof player.setPlaybackQualityRange === 'function') {
+                const current = player.getPlaybackQuality();
+                if (current && (current === 'tiny' || current === 'small' || current === 'medium' || current === 'large')) {
+                    player.setPlaybackQualityRange('highres');
+                }
             }
-        }
+        } catch (_) {}
     }
 
     // 9. Auto-Confirm "Still Watching?"
@@ -422,26 +581,32 @@
         }
     });
 
-    // SPA Navigation Listener
+    // SPA Navigation Listeners
     window.addEventListener('yt-navigate-finish', () => {
         syncVideoMeta();
+        tick();
+    });
+    window.addEventListener('yt-page-data-updated', () => {
+        syncVideoMeta();
+        tick();
     });
 
     // 13. Main Loop & Observers
     function tick() {
-        injectStyles();
-        checkShortsRedirect();
-        handleVideoAds();
-        handleAntiAdblock();
-        handleStillWatching();
-        injectPiPButton();
-        syncTitle();
-        enforceMaxQuality();
+        try { injectStyles(); } catch (_) {}
+        try { checkShortsRedirect(); } catch (_) {}
+        try { handleVideoAds(); } catch (_) {}
+        try { handleAntiAdblock(); } catch (_) {}
+        try { handleStillWatching(); } catch (_) {}
+        try { injectPiPButton(); } catch (_) {}
+        try { syncTitle(); } catch (_) {}
+        try { enforceMaxQuality(); } catch (_) {}
+        try { hookVideoEvents(); } catch (_) {}
 
-        syncVideoMeta();
-        applyDislikes();
-        renderSponsorSegments();
-        checkSponsorSkip();
+        try { syncVideoMeta(); } catch (_) {}
+        try { applyDislikes(); } catch (_) {}
+        try { renderSponsorSegments(); } catch (_) {}
+        try { checkSponsorSkip(); } catch (_) {}
     }
 
     tick();
