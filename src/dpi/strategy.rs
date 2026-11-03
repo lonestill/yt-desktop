@@ -156,7 +156,7 @@ pub fn probe_strategy(tpws_bin: &PathBuf, preset: &StrategyPreset, test_port: u1
         "-s",
         "-I",
         "-o",
-        "/dev/null",
+        if cfg!(target_os = "windows") { "NUL" } else { "/dev/null" },
         "-w",
         "%{http_code}",
         "--connect-timeout",
@@ -183,7 +183,7 @@ pub fn probe_strategy(tpws_bin: &PathBuf, preset: &StrategyPreset, test_port: u1
         Ok(out) => {
             let code_str = String::from_utf8_lossy(&out.stdout).trim().to_string();
             let elapsed_ms = start.elapsed().as_millis() as u64;
-            if code_str == "200" || code_str.starts_with("30") {
+            if out.status.success() && (code_str == "200" || code_str.starts_with("30")) {
                 BenchmarkResult {
                     strategy_id: preset.id.clone(),
                     strategy_name: preset.name.clone(),

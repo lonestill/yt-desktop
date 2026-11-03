@@ -78,7 +78,7 @@ impl DpiManager {
 
         if let Err(e) = manager.spawn_tpws(active_id, &initial_config.custom_tpws_args) {
             eprintln!("[DPI-BYPASS] ⚠️ Initial spawn of strategy '{active_id}' failed: {e}");
-            let _ = manager.spawn_tpws("rostelecom", "");
+            manager.spawn_tpws("rostelecom", "")?;
         }
 
         Ok(manager)
@@ -146,7 +146,26 @@ impl DpiManager {
         }
 
         match cmd.spawn() {
-            Ok(child) => {
+            Ok(mut child) => {
+                let mut ready = false;
+                for _ in 0..100 {
+                    if let Some(status) = child.try_wait().map_err(|e| e.to_string())? {
+                        return Err(format!("DPI engine exited before becoming ready: {status}"));
+                    }
+                    if std::net::TcpStream::connect_timeout(
+                        &std::net::SocketAddr::from(([127, 0, 0, 1], self.port)),
+                        Duration::from_millis(20),
+                    ).is_ok() {
+                        ready = true;
+                        break;
+                    }
+                    thread::sleep(Duration::from_millis(20));
+                }
+                if !ready {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err("DPI engine did not open its SOCKS port".into());
+                }
                 println!(
                     "[DPI-BYPASS] ⚡ Activated strategy '{}' (engine: {}) on port {}",
                     preset_id,
