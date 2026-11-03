@@ -246,9 +246,6 @@ fn main() {
         .with_accept_first_mouse(true)
         .with_devtools(true)
         .with_background_throttling(BackgroundThrottlingPolicy::Disabled)
-        .with_user_agent(
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Safari/605.1.15",
-        )
         .with_initialization_script(&init_script)
         .with_proxy_config(ProxyConfig::Socks5(ProxyEndpoint {
             host: "127.0.0.1".to_string(),

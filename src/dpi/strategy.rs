@@ -25,7 +25,7 @@ pub fn get_available_strategies() -> Vec<StrategyPreset> {
             ],
             win_args: vec![
                 "--split=1+s".to_string(),
-                "--disorder=1".to_string(),
+                "--disorder=3+s".to_string(),
             ],
         },
         StrategyPreset {
@@ -38,7 +38,7 @@ pub fn get_available_strategies() -> Vec<StrategyPreset> {
             ],
             win_args: vec![
                 "--split=1+s".to_string(),
-                "--oob=1".to_string(),
+                "--oob=3+s".to_string(),
             ],
         },
         StrategyPreset {
@@ -51,7 +51,7 @@ pub fn get_available_strategies() -> Vec<StrategyPreset> {
             ],
             win_args: vec![
                 "--split=1".to_string(),
-                "--disorder=1".to_string(),
+                "--disorder=3+s".to_string(),
             ],
         },
         StrategyPreset {
@@ -175,6 +175,22 @@ pub fn probe_strategy(tpws_bin: &PathBuf, preset: &StrategyPreset, test_port: u1
     }
 
     let curl_output = curl_cmd.output();
+    // A reachable homepage alone does not establish access to Google's video service.
+    let media_output = if curl_output.as_ref().map(|out| out.status.success()).unwrap_or(false) {
+        let mut media_cmd = Command::new("curl");
+        media_cmd.args(["-s", "-o", if cfg!(target_os = "windows") { "NUL" } else { "/dev/null" },
+            "-w", "%{http_code}", "--connect-timeout", "3", "--max-time", "5",
+            "-x", &format!("socks5h://127.0.0.1:{test_port}"), "https://redirector.googlevideo.com/"]);
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            media_cmd.creation_flags(0x08000000);
+        }
+        media_cmd.output().ok()
+    } else { None };
+    let media_reachable = media_output.as_ref().map(|out| {
+        out.status.success() && String::from_utf8_lossy(&out.stdout).trim() != "000"
+    }).unwrap_or(false);
 
     let _ = child.kill();
     let _ = child.wait();
@@ -183,7 +199,7 @@ pub fn probe_strategy(tpws_bin: &PathBuf, preset: &StrategyPreset, test_port: u1
         Ok(out) => {
             let code_str = String::from_utf8_lossy(&out.stdout).trim().to_string();
             let elapsed_ms = start.elapsed().as_millis() as u64;
-            if out.status.success() && (code_str == "200" || code_str.starts_with("30")) {
+            if media_reachable && out.status.success() && (code_str == "200" || code_str.starts_with("30")) {
                 BenchmarkResult {
                     strategy_id: preset.id.clone(),
                     strategy_name: preset.name.clone(),

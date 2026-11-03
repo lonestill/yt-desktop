@@ -79,6 +79,7 @@
 
     window.__applyConfig = function(cfg) {
         userConfig = Object.assign(userConfig, cfg);
+        if (!document.documentElement) return;
         if (userConfig.block_shorts) {
             document.documentElement.classList.add('yt-hide-shorts');
         } else {
@@ -951,7 +952,14 @@
         }
     };
 
+    let pendingHudState = null;
     window.__onHudState = function(cfg, status, isFirstRun) {
+        if (!document.documentElement || !document.body) {
+            const previous = pendingHudState || [];
+            pendingHudState = [cfg || previous[0], status || previous[1], isFirstRun ?? previous[2]];
+            if (cfg) window.__applyConfig(cfg);
+            return;
+        }
         try {
             renderGlassPill();
             renderControlCenterHud();
@@ -1400,6 +1408,12 @@
 
     // 14. Main Loop & Observers
     function tick() {
+        if (!document.documentElement || !document.body) return;
+        if (pendingHudState) {
+            const state = pendingHudState;
+            pendingHudState = null;
+            window.__onHudState(...state);
+        }
         injectStyles();
         if (welcomePending) {
             renderWelcomeScreen();
