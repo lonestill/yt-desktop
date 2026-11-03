@@ -924,7 +924,7 @@
             if (hud && hud.classList.contains('open')) {
                 positionHud();
             }
-            if (isFirstRun) {
+            if (isFirstRun === true || (cfg && cfg.first_run_completed === false)) {
                 window.__showHelloScreen();
             }
 
@@ -1055,12 +1055,17 @@
 
     let currentWelcomeLang = detectDefaultLang();
     let currentWelcomeMode = currentWelcomeLang === 'ru' ? 'bypass' : 'direct';
+    let welcomePending = (window.__YT_FIRST_RUN__ === true);
 
     function renderWelcomeScreen() {
-        if (!document.body) return;
+        if (!document.body) {
+            welcomePending = true;
+            return;
+        }
         let overlay = document.getElementById('yt-desktop-welcome');
         if (overlay) {
             overlay.classList.add('open');
+            welcomePending = false;
             return;
         }
 
@@ -1160,6 +1165,13 @@
             updateMode('direct');
         });
 
+        function closeWelcome() {
+            window.__YT_FIRST_RUN__ = false;
+            welcomePending = false;
+            overlay.classList.remove('open');
+            setTimeout(() => overlay.remove(), 200);
+        }
+
         // Submit Button
         const submitBtn = document.createElement('button');
         submitBtn.type = 'button';
@@ -1182,6 +1194,8 @@
             userConfig.selected_strategy = chosenStrategy;
             userConfig.first_run_completed = true;
             userConfig.app_locale = currentWelcomeLang;
+            window.__YT_FIRST_RUN__ = false;
+            welcomePending = false;
 
             postIpc({
                 type: 'complete_onboarding',
@@ -1189,10 +1203,7 @@
                 config: userConfig
             });
 
-            overlay.classList.remove('open');
-            setTimeout(() => {
-                overlay.remove();
-            }, 200);
+            closeWelcome();
         }
 
         submitBtn.addEventListener('click', (e) => {
@@ -1220,8 +1231,7 @@
             } else if (e.key === 'Escape') {
                 e.preventDefault();
                 window.removeEventListener('keydown', onKeyDown);
-                overlay.classList.remove('open');
-                setTimeout(() => overlay.remove(), 200);
+                closeWelcome();
             }
         }
         window.addEventListener('keydown', onKeyDown);
@@ -1230,14 +1240,12 @@
         overlay.addEventListener('click', (e) => {
             if (e.target === overlay) {
                 window.removeEventListener('keydown', onKeyDown);
-                overlay.classList.remove('open');
-                setTimeout(() => overlay.remove(), 200);
+                closeWelcome();
             }
         });
 
-        requestAnimationFrame(() => {
-            overlay.classList.add('open');
-        });
+        overlay.classList.add('open');
+        welcomePending = false;
     }
 
     function setWelcomeLang(lang) {
@@ -1266,6 +1274,7 @@
     }
 
     window.__showHelloScreen = function() {
+        welcomePending = true;
         renderWelcomeScreen();
     };
 
@@ -1311,6 +1320,9 @@
     // 14. Main Loop & Observers
     function tick() {
         injectStyles();
+        if (welcomePending) {
+            renderWelcomeScreen();
+        }
         renderGlassPill();
         renderControlCenterHud();
         checkShortsRedirect();

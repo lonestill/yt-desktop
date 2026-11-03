@@ -57,7 +57,7 @@ enum AppEvent {
     ToggleHud,
     ShowHello,
     MenuItemClicked(String),
-    UpdateHudState(serde_json::Value, serde_json::Value),
+    UpdateHudState(serde_json::Value, serde_json::Value, bool),
     BenchmarkDone(Vec<BenchmarkResult>, serde_json::Value),
     VideoMetaLoaded {
         video_id: String,
@@ -114,8 +114,11 @@ fn main() {
     let force_first_run = std::env::args().any(|a| a == "--first" || a == "-f" || a == "--welcome" || a == "--hello");
 
     // 1. Load persistent configuration
-    let (initial_config, is_new_config) = load_config();
+    let (mut initial_config, is_new_config) = load_config();
     let is_first_run = force_first_run || is_new_config || !initial_config.first_run_completed;
+    if force_first_run {
+        initial_config.first_run_completed = false;
+    }
 
     let config = Arc::new(Mutex::new(initial_config));
 
@@ -230,7 +233,7 @@ fn main() {
                         let cfg = ipc_cfg.lock().unwrap();
                         let status = ipc_dpi.get_status_data(&cfg);
                         let cfg_json = serde_json::to_value(&*cfg).unwrap_or_default();
-                        let _ = ipc_proxy.send_event(AppEvent::UpdateHudState(cfg_json, status));
+                        let _ = ipc_proxy.send_event(AppEvent::UpdateHudState(cfg_json, status, is_first_run));
                     }
                     MainIpcMessage::SaveConfig { config: new_cfg } => {
                         save_config(&new_cfg);
@@ -238,7 +241,7 @@ fn main() {
                         *cfg = new_cfg;
                         let status = ipc_dpi.get_status_data(&cfg);
                         let cfg_json = serde_json::to_value(&*cfg).unwrap_or_default();
-                        let _ = ipc_proxy.send_event(AppEvent::UpdateHudState(cfg_json, status));
+                        let _ = ipc_proxy.send_event(AppEvent::UpdateHudState(cfg_json, status, false));
                     }
                     MainIpcMessage::SetDpiStrategy { strategy_id } => {
                         let mgr = Arc::clone(&ipc_dpi);
@@ -251,7 +254,7 @@ fn main() {
                                 save_config(&cfg);
                                 (serde_json::to_value(&*cfg).unwrap_or_default(), mgr.get_status_data(&cfg))
                             };
-                            let _ = p.send_event(AppEvent::UpdateHudState(cfg_val, status));
+                            let _ = p.send_event(AppEvent::UpdateHudState(cfg_val, status, false));
                         });
                     }
                     MainIpcMessage::RunDpiBenchmark => {
@@ -270,7 +273,7 @@ fn main() {
                                 (serde_json::to_value(&*cfg).unwrap_or_default(), mgr.get_status_data(&cfg))
                             };
                             let _ = p.send_event(AppEvent::BenchmarkDone(results, status.clone()));
-                            let _ = p.send_event(AppEvent::UpdateHudState(cfg_val, status));
+                            let _ = p.send_event(AppEvent::UpdateHudState(cfg_val, status, false));
                         });
                     }
                     MainIpcMessage::OpenConfigFolder => {
@@ -291,7 +294,7 @@ fn main() {
                                 save_config(&cfg);
                                 (serde_json::to_value(&*cfg).unwrap_or_default(), mgr.get_status_data(&cfg))
                             };
-                            let _ = p.send_event(AppEvent::UpdateHudState(cfg_val, status));
+                            let _ = p.send_event(AppEvent::UpdateHudState(cfg_val, status, false));
                         });
                     }
                     MainIpcMessage::ShowHello => {
@@ -420,7 +423,7 @@ fn main() {
                                 (serde_json::to_value(&*cfg).unwrap_or_default(), mgr.get_status_data(&cfg))
                             };
                             let _ = p.send_event(AppEvent::BenchmarkDone(results, status.clone()));
-                            let _ = p.send_event(AppEvent::UpdateHudState(cfg_val, status));
+                            let _ = p.send_event(AppEvent::UpdateHudState(cfg_val, status, false));
                         });
                     }
                     strat if strat.starts_with("dpi.strategy.") => {
@@ -435,14 +438,14 @@ fn main() {
                                 save_config(&cfg);
                                 (serde_json::to_value(&*cfg).unwrap_or_default(), mgr.get_status_data(&cfg))
                             };
-                            let _ = p.send_event(AppEvent::UpdateHudState(cfg_val, status));
+                            let _ = p.send_event(AppEvent::UpdateHudState(cfg_val, status, false));
                         });
                     }
                     _ => ()
                 }
             }
-            Event::UserEvent(AppEvent::UpdateHudState(cfg_val, status)) => {
-                let js = format!("if (window.__onHudState) window.__onHudState({}, {});", cfg_val, status);
+            Event::UserEvent(AppEvent::UpdateHudState(cfg_val, status, is_first)) => {
+                let js = format!("if (window.__onHudState) window.__onHudState({}, {}, {});", cfg_val, status, is_first);
                 let _ = main_webview.evaluate_script(&js);
                 if let Some(ref m) = _menu_guard {
                     if let Some(active) = status.get("active_strategy").and_then(|v| v.as_str()) {
