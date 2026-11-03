@@ -18,66 +18,81 @@ pub fn get_available_strategies() -> Vec<StrategyPreset> {
         StrategyPreset {
             id: "rostelecom".to_string(),
             name: "Ростелеком / Дом.ру".to_string(),
-            isp_hint: "midsld + disorder=tls (лучший под ТСПУ Ростелеком)".to_string(),
+            isp_hint: "split=1 + disorder=3+s (лучший под ТСПУ Ростелеком)".to_string(),
             args: vec![
                 "--split-pos=midsld".to_string(),
                 "--disorder=tls".to_string(),
             ],
             win_args: vec![
-                "--split=1+s".to_string(),
-                "--disorder=3+s".to_string(),
+                "-U".to_string(),
+                "-s".to_string(),
+                "1".to_string(),
+                "-d".to_string(),
+                "3+s".to_string(),
             ],
         },
         StrategyPreset {
             id: "mts_megafon".to_string(),
             name: "МТС / Мегафон / Yota".to_string(),
-            isp_hint: "midsld + oob=tls (обход DPI через TCP OOB)".to_string(),
+            isp_hint: "split=1+s + disoob=3+s (обход DPI через TCP Disoob)".to_string(),
             args: vec![
                 "--split-pos=midsld".to_string(),
                 "--oob=tls".to_string(),
             ],
             win_args: vec![
-                "--split=1+s".to_string(),
-                "--oob=3+s".to_string(),
+                "-U".to_string(),
+                "-s".to_string(),
+                "1+s".to_string(),
+                "-q".to_string(),
+                "3+s".to_string(),
             ],
         },
         StrategyPreset {
             id: "beeline_mgts".to_string(),
             name: "Билайн / МГТС / Теле2".to_string(),
-            isp_hint: "split=1 + disorder=tls (первый байт + disorder)".to_string(),
+            isp_hint: "split=1+s + disorder=3+s (первый байт SNI + disorder)".to_string(),
             args: vec![
                 "--split-pos=1".to_string(),
                 "--disorder=tls".to_string(),
             ],
             win_args: vec![
-                "--split=1".to_string(),
-                "--disorder=3+s".to_string(),
+                "-U".to_string(),
+                "-s".to_string(),
+                "1+s".to_string(),
+                "-d".to_string(),
+                "3+s".to_string(),
             ],
         },
         StrategyPreset {
             id: "tlsrec_midsld".to_string(),
-            name: "TLS Record (SLD)".to_string(),
-            isp_hint: "midsld + tlsrec=midsld (деление на TLS записи)".to_string(),
+            name: "TLS Disoob (SLD)".to_string(),
+            isp_hint: "split=1 + disoob=1 (рассинхронизация сессии)".to_string(),
             args: vec![
                 "--split-pos=midsld".to_string(),
                 "--tlsrec=midsld".to_string(),
             ],
             win_args: vec![
-                "--split=1+s".to_string(),
-                "--tlsrec=1+s".to_string(),
+                "-U".to_string(),
+                "-s".to_string(),
+                "1".to_string(),
+                "-q".to_string(),
+                "1".to_string(),
             ],
         },
         StrategyPreset {
             id: "tlsrec_sni".to_string(),
-            name: "TLS Record (SNI Ext)".to_string(),
-            isp_hint: "split=1 + tlsrec=sniext+2".to_string(),
+            name: "Fake Packet (TTL)".to_string(),
+            isp_hint: "fake packet с низким TTL (обход через фейковый SNI)".to_string(),
             args: vec![
                 "--split-pos=1".to_string(),
                 "--tlsrec=sniext+2".to_string(),
             ],
             win_args: vec![
-                "--split=1+s".to_string(),
-                "--tlsrec=1+s".to_string(),
+                "-U".to_string(),
+                "-f".to_string(),
+                "-1".to_string(),
+                "-t".to_string(),
+                "4".to_string(),
             ],
         },
         StrategyPreset {
@@ -100,7 +115,7 @@ pub struct BenchmarkResult {
 }
 
 /// Tests a specific strategy against https://www.youtube.com using a temporary proxy instance
-pub fn probe_strategy(tpws_bin: &PathBuf, preset: &StrategyPreset, test_port: u16) -> BenchmarkResult {
+pub fn probe_strategy(tpws_bin: &PathBuf, preset: &StrategyPreset, test_port: u16, conn_ip: Option<&str>) -> BenchmarkResult {
     let is_ciadpi = tpws_bin
         .file_name()
         .and_then(|f| f.to_str())
@@ -110,6 +125,9 @@ pub fn probe_strategy(tpws_bin: &PathBuf, preset: &StrategyPreset, test_port: u1
     let mut cmd = Command::new(tpws_bin);
     if is_ciadpi {
         cmd.args(["-i", "127.0.0.1", "-p", &test_port.to_string()]);
+        if let Some(ip) = conn_ip {
+            cmd.args(["-I", ip]);
+        }
         let args_to_use = if !preset.win_args.is_empty() {
             &preset.win_args
         } else {
@@ -148,7 +166,38 @@ pub fn probe_strategy(tpws_bin: &PathBuf, preset: &StrategyPreset, test_port: u1
         }
     };
 
-    std::thread::sleep(Duration::from_millis(80));
+    let mut ready = false;
+    for _ in 0..50 {
+        if let Ok(Some(status)) = child.try_wait() {
+            return BenchmarkResult {
+                strategy_id: preset.id.clone(),
+                strategy_name: preset.name.clone(),
+                success: false,
+                latency_ms: None,
+                error: Some(format!("Exited early: {status}")),
+            };
+        }
+        if std::net::TcpStream::connect_timeout(
+            &std::net::SocketAddr::from(([127, 0, 0, 1], test_port)),
+            Duration::from_millis(15),
+        ).is_ok() {
+            ready = true;
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(15));
+    }
+
+    if !ready {
+        let _ = child.kill();
+        let _ = child.wait();
+        return BenchmarkResult {
+            strategy_id: preset.id.clone(),
+            strategy_name: preset.name.clone(),
+            success: false,
+            latency_ms: None,
+            error: Some("Port bind timeout".into()),
+        };
+    }
 
     let start = Instant::now();
     let mut curl_cmd = Command::new("curl");
