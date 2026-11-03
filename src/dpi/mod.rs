@@ -9,7 +9,7 @@ use std::thread;
 use std::time::Duration;
 use strategy::{get_available_strategies, probe_strategy, BenchmarkResult};
 
-fn find_tpws_binary() -> Option<PathBuf> {
+pub fn find_tpws_binary() -> Option<PathBuf> {
     // 1. Next to current executable (inside YouTube.app/Contents/MacOS/tpws)
     if let Ok(exe) = std::env::current_exe() {
         if let Some(parent) = exe.parent() {
@@ -151,13 +151,15 @@ impl DpiManager {
     pub fn run_benchmark(&self) -> Vec<BenchmarkResult> {
         let presets = get_available_strategies();
         let tpws_bin = self.tpws_bin.clone();
+        let pid = std::process::id() as u16;
 
         println!("[DPI-BENCHMARK] 🚀 Probing {} strategies in parallel...", presets.len());
 
         let mut handles = Vec::new();
-        for preset in presets {
+        for (i, preset) in presets.into_iter().enumerate() {
             let bin = tpws_bin.clone();
-            handles.push(thread::spawn(move || probe_strategy(&bin, &preset)));
+            let test_port = 52000 + (pid % 5000) + (i as u16 * 10);
+            handles.push(thread::spawn(move || probe_strategy(&bin, &preset, test_port)));
         }
 
         let mut results = Vec::new();
@@ -165,6 +167,38 @@ impl DpiManager {
             if let Ok(res) = h.join() {
                 results.push(res);
             }
+        }
+
+        results
+    }
+
+    pub fn benchmark_and_select_best(tpws_bin: &PathBuf, config: &mut AppConfig) -> Vec<BenchmarkResult> {
+        let presets = get_available_strategies();
+        let pid = std::process::id() as u16;
+
+        println!("[DPI-STARTUP] 🚀 Probing {} strategies in parallel to find best route...", presets.len());
+
+        let mut handles = Vec::new();
+        for (i, preset) in presets.into_iter().enumerate() {
+            let bin = tpws_bin.clone();
+            let test_port = 52000 + (pid % 5000) + (i as u16 * 10);
+            handles.push(thread::spawn(move || probe_strategy(&bin, &preset, test_port)));
+        }
+
+        let mut results = Vec::new();
+        for h in handles {
+            if let Ok(res) = h.join() {
+                results.push(res);
+            }
+        }
+
+        let winner = results.iter().filter(|r| r.success).min_by_key(|r| r.latency_ms.unwrap_or(u64::MAX)).cloned();
+        if let Some(w) = winner {
+            println!("[DPI-STARTUP] 🏆 Best route selected: '{}' (latency: {:?} ms)", w.strategy_id, w.latency_ms);
+            config.active_strategy = w.strategy_id.clone();
+            config.last_latency_ms = w.latency_ms;
+        } else {
+            println!("[DPI-STARTUP] ⚠️ No working routes responded to probe, keeping '{}'", config.active_strategy);
         }
 
         results

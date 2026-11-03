@@ -940,6 +940,20 @@
             }
 
             if (status) {
+                if (status.active_strategy === 'direct') {
+                    currentWelcomeMode = 'direct';
+                    const directBtn = document.querySelector('.yt-welcome-seg-btn[data-mode="direct"]');
+                    const bypassBtn = document.querySelector('.yt-welcome-seg-btn[data-mode="bypass"]');
+                    if (directBtn && bypassBtn) {
+                        directBtn.classList.add('active');
+                        bypassBtn.classList.remove('active');
+                        const hint = document.getElementById('yt-welcome-hint');
+                        if (hint && I18N[currentWelcomeLang]) {
+                            hint.textContent = I18N[currentWelcomeLang].desc_direct;
+                        }
+                    }
+                }
+
                 const strategyMap = {
                     'auto': 'Авто',
                     'rostelecom': 'Ростелеком',

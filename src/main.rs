@@ -120,6 +120,19 @@ fn main() {
         initial_config.first_run_completed = false;
     }
 
+    // Benchmark all strategies on startup in parallel to pick the fastest working route
+    let initial_bench_results = if initial_config.selected_strategy == "auto" || is_first_run {
+        if let Some(tpws_bin) = crate::dpi::find_tpws_binary() {
+            let results = DpiManager::benchmark_and_select_best(&tpws_bin, &mut initial_config);
+            save_config(&initial_config);
+            Some(results)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
     let config = Arc::new(Mutex::new(initial_config));
 
     // 2. Initialize embedded DPI bypass proxy engine
@@ -200,6 +213,7 @@ fn main() {
     let ipc_dpi = Arc::clone(&dpi_manager);
     let ipc_cfg = Arc::clone(&config);
     let ipc_proxy = proxy.clone();
+    let initial_bench_clone = initial_bench_results.clone();
 
     // Build Main WebView
     let main_webview = WebViewBuilder::new_with_web_context(&mut main_web_context)
@@ -233,7 +247,10 @@ fn main() {
                         let cfg = ipc_cfg.lock().unwrap();
                         let status = ipc_dpi.get_status_data(&cfg);
                         let cfg_json = serde_json::to_value(&*cfg).unwrap_or_default();
-                        let _ = ipc_proxy.send_event(AppEvent::UpdateHudState(cfg_json, status, is_first_run));
+                        let _ = ipc_proxy.send_event(AppEvent::UpdateHudState(cfg_json, status.clone(), is_first_run));
+                        if let Some(ref res) = initial_bench_clone {
+                            let _ = ipc_proxy.send_event(AppEvent::BenchmarkDone(res.clone(), status));
+                        }
                     }
                     MainIpcMessage::SaveConfig { config: new_cfg } => {
                         save_config(&new_cfg);
@@ -361,6 +378,13 @@ fn main() {
             "if (window.__onHudState) window.__onHudState({}, {}, {});",
             cfg_json, status, is_first_run
         ));
+        if let Some(ref results) = initial_bench_results {
+            let res_json = serde_json::to_string(results).unwrap_or_else(|_| "[]".to_string());
+            let _ = main_webview.evaluate_script(&format!(
+                "if (window.__onBenchmarkDone) window.__onBenchmarkDone({}, {});",
+                res_json, status
+            ));
+        }
         if is_first_run {
             let _ = main_webview.evaluate_script("if (window.__showHelloScreen) window.__showHelloScreen();");
         }

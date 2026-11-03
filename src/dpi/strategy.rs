@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use std::net::TcpListener;
 use std::path::PathBuf;
 use std::process::Command;
 use std::time::{Duration, Instant};
@@ -78,31 +77,7 @@ pub struct BenchmarkResult {
 }
 
 /// Tests a specific strategy against https://www.youtube.com using a temporary tpws instance
-pub fn probe_strategy(tpws_bin: &PathBuf, preset: &StrategyPreset) -> BenchmarkResult {
-    let test_port = match TcpListener::bind("127.0.0.1:0") {
-        Ok(l) => match l.local_addr() {
-            Ok(a) => a.port(),
-            Err(e) => {
-                return BenchmarkResult {
-                    strategy_id: preset.id.clone(),
-                    strategy_name: preset.name.clone(),
-                    success: false,
-                    latency_ms: None,
-                    error: Some(format!("Local port err: {e}")),
-                }
-            }
-        },
-        Err(e) => {
-            return BenchmarkResult {
-                strategy_id: preset.id.clone(),
-                strategy_name: preset.name.clone(),
-                success: false,
-                latency_ms: None,
-                error: Some(format!("Bind err: {e}")),
-            }
-        }
-    };
-
+pub fn probe_strategy(tpws_bin: &PathBuf, preset: &StrategyPreset, test_port: u16) -> BenchmarkResult {
     let mut cmd = Command::new(tpws_bin);
     cmd.args([
         "--socks",
@@ -126,20 +101,21 @@ pub fn probe_strategy(tpws_bin: &PathBuf, preset: &StrategyPreset) -> BenchmarkR
         }
     };
 
-    std::thread::sleep(Duration::from_millis(100));
+    std::thread::sleep(Duration::from_millis(80));
 
     let start = Instant::now();
     let curl_output = Command::new("curl")
         .args([
             "-s",
+            "-I",
             "-o",
             "/dev/null",
             "-w",
             "%{http_code}",
             "--connect-timeout",
-            "3",
+            "2",
             "--max-time",
-            "4",
+            "3",
             "-x",
             &format!("socks5h://127.0.0.1:{test_port}"),
             "https://www.youtube.com",
