@@ -31,9 +31,12 @@ jobs:
           make mac
           lipo -info tpws
 
+      - name: Test application
+        run: cargo test --locked
+
       - name: Build release binary
         run: |
-          cargo build --release
+          cargo build --release --locked
 
       - name: Assemble macOS Bundle
         run: |
@@ -84,9 +87,12 @@ jobs:
           make
           strip tpws
 
+      - name: Test application
+        run: cargo test --locked
+
       - name: Build release binary
         run: |
-          cargo build --release
+          cargo build --release --locked
 
       - name: Package Linux Archive
         run: |
@@ -113,9 +119,12 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Test application
+        run: cargo test --locked
+
       - name: Build release binary
         run: |
-          cargo build --release
+          cargo build --release --locked
 
       - name: Download ByeDPI (ciadpi.exe)
         shell: pwsh

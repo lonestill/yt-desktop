@@ -166,3 +166,18 @@ Distributed under the **MIT License**.
 Embedded DPI engines:
 - `tpws`: Bol-van (Zapret project)
 - `ciadpi`: Hufrea (ByeDPI project)
+
+
+### Platform validation
+
+CI runs Rust tests and builds on macOS, Windows x64 and Linux x64.
+The macOS bundle contains both Apple Silicon and Intel executables.
+Windows requires the Microsoft Edge WebView2 Runtime. Linux requires GTK 3,
+WebKitGTK 4.1 and curl at runtime; archives do not bundle these system libraries.
+Native playback, login and DPI behavior still require testing on each OS.
+For a local universal macOS build, install both targets first:
+
+```sh
+rustup target add aarch64-apple-darwin x86_64-apple-darwin
+./build_app.sh
+```

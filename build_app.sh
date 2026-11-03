@@ -22,13 +22,16 @@ fi
 
 echo "[*] Building release binary..."
 cd "$DIR"
-cargo build --release
+cargo build --release --target aarch64-apple-darwin
+cargo build --release --target x86_64-apple-darwin
+mkdir -p target/universal/release
+lipo -create target/aarch64-apple-darwin/release/yt-desktop target/x86_64-apple-darwin/release/yt-desktop -output target/universal/release/yt-desktop
 
 echo "[*] Assembling macOS app bundle..."
 rm -rf "$APP_DIR"
 mkdir -p "$MACOS" "$RESOURCES"
 
-cp "$DIR/target/release/yt-desktop" "$MACOS/yt-desktop"
+cp "$DIR/target/universal/release/yt-desktop" "$MACOS/yt-desktop"
 cp "$DIR/tpws/tpws" "$MACOS/tpws"
 chmod +x "$MACOS/yt-desktop" "$MACOS/tpws"
 

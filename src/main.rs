@@ -200,6 +200,17 @@ fn main() {
     }
 
     let main_window = main_builder.build(&event_loop).expect("Failed to create native window");
+    #[cfg(target_os = "windows")]
+    if let Some(menu) = &app_menu {
+        use tao::platform::windows::WindowExtWindows;
+        unsafe { menu.menu.init_for_hwnd(main_window.hwnd()).expect("Failed to attach menu"); }
+    }
+    #[cfg(target_os = "linux")]
+    if let Some(menu) = &app_menu {
+        use tao::platform::unix::WindowExtUnix;
+        menu.menu.init_for_gtk_window(main_window.gtk_window(), main_window.default_vbox())
+            .expect("Failed to attach menu");
+    }
     main_window.set_visible(true);
     main_window.set_focus();
     let main_window_id = main_window.id();
@@ -412,9 +423,17 @@ fn main() {
                 eprintln!("[MAIN-IPC] ❌ Failed to parse IPC message: {}", body);
             }
         })
-        .with_url("https://www.youtube.com")
-        .build(&main_window)
-        .expect("Failed to initialize Main WebKit Webview");
+        .with_url("https://www.youtube.com");
+    #[cfg(not(target_os = "linux"))]
+    let main_webview = main_webview.build(&main_window)
+        .expect("Failed to initialize webview");
+    #[cfg(target_os = "linux")]
+    let main_webview = {
+        use tao::platform::unix::WindowExtUnix;
+        use wry::WebViewBuilderExtUnix;
+        main_webview.build_gtk(main_window.default_vbox().expect("Missing GTK container"))
+            .expect("Failed to initialize webview")
+    };
 
     // Apply initial config to main webview
     {
