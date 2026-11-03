@@ -9,6 +9,8 @@ pub struct StrategyPreset {
     pub name: String,
     pub isp_hint: String,
     pub args: Vec<String>,
+    #[serde(default)]
+    pub win_args: Vec<String>,
 }
 
 pub fn get_available_strategies() -> Vec<StrategyPreset> {
@@ -21,6 +23,10 @@ pub fn get_available_strategies() -> Vec<StrategyPreset> {
                 "--split-pos=midsld".to_string(),
                 "--disorder=tls".to_string(),
             ],
+            win_args: vec![
+                "--split=1+s".to_string(),
+                "--disorder=1".to_string(),
+            ],
         },
         StrategyPreset {
             id: "mts_megafon".to_string(),
@@ -29,6 +35,10 @@ pub fn get_available_strategies() -> Vec<StrategyPreset> {
             args: vec![
                 "--split-pos=midsld".to_string(),
                 "--oob=tls".to_string(),
+            ],
+            win_args: vec![
+                "--split=1+s".to_string(),
+                "--oob=1".to_string(),
             ],
         },
         StrategyPreset {
@@ -39,6 +49,10 @@ pub fn get_available_strategies() -> Vec<StrategyPreset> {
                 "--split-pos=1".to_string(),
                 "--disorder=tls".to_string(),
             ],
+            win_args: vec![
+                "--split=1".to_string(),
+                "--disorder=1".to_string(),
+            ],
         },
         StrategyPreset {
             id: "tlsrec_midsld".to_string(),
@@ -47,6 +61,10 @@ pub fn get_available_strategies() -> Vec<StrategyPreset> {
             args: vec![
                 "--split-pos=midsld".to_string(),
                 "--tlsrec=midsld".to_string(),
+            ],
+            win_args: vec![
+                "--split=1+s".to_string(),
+                "--tlsrec=1+s".to_string(),
             ],
         },
         StrategyPreset {
@@ -57,12 +75,17 @@ pub fn get_available_strategies() -> Vec<StrategyPreset> {
                 "--split-pos=1".to_string(),
                 "--tlsrec=sniext+2".to_string(),
             ],
+            win_args: vec![
+                "--split=1+s".to_string(),
+                "--tlsrec=1+s".to_string(),
+            ],
         },
         StrategyPreset {
             id: "direct".to_string(),
             name: "Прямое подключение".to_string(),
             isp_hint: "Без модификации пакетов (для VPN)".to_string(),
             args: vec![],
+            win_args: vec![],
         },
     ]
 }
@@ -76,16 +99,40 @@ pub struct BenchmarkResult {
     pub error: Option<String>,
 }
 
-/// Tests a specific strategy against https://www.youtube.com using a temporary tpws instance
+/// Tests a specific strategy against https://www.youtube.com using a temporary proxy instance
 pub fn probe_strategy(tpws_bin: &PathBuf, preset: &StrategyPreset, test_port: u16) -> BenchmarkResult {
+    let is_ciadpi = tpws_bin
+        .file_name()
+        .and_then(|f| f.to_str())
+        .map(|s| s.contains("ciadpi"))
+        .unwrap_or(false);
+
     let mut cmd = Command::new(tpws_bin);
-    cmd.args([
-        "--socks",
-        "--bind-addr=127.0.0.1",
-        &format!("--port={test_port}"),
-    ]);
-    for arg in &preset.args {
-        cmd.arg(arg);
+    if is_ciadpi {
+        cmd.args(["-i", "127.0.0.1", "-p", &test_port.to_string()]);
+        let args_to_use = if !preset.win_args.is_empty() {
+            &preset.win_args
+        } else {
+            &preset.args
+        };
+        for arg in args_to_use {
+            cmd.arg(arg);
+        }
+    } else {
+        cmd.args([
+            "--socks",
+            "--bind-addr=127.0.0.1",
+            &format!("--port={test_port}"),
+        ]);
+        for arg in &preset.args {
+            cmd.arg(arg);
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
     }
 
     let mut child = match cmd.spawn() {
@@ -104,23 +151,30 @@ pub fn probe_strategy(tpws_bin: &PathBuf, preset: &StrategyPreset, test_port: u1
     std::thread::sleep(Duration::from_millis(80));
 
     let start = Instant::now();
-    let curl_output = Command::new("curl")
-        .args([
-            "-s",
-            "-I",
-            "-o",
-            "/dev/null",
-            "-w",
-            "%{http_code}",
-            "--connect-timeout",
-            "2",
-            "--max-time",
-            "3",
-            "-x",
-            &format!("socks5h://127.0.0.1:{test_port}"),
-            "https://www.youtube.com",
-        ])
-        .output();
+    let mut curl_cmd = Command::new("curl");
+    curl_cmd.args([
+        "-s",
+        "-I",
+        "-o",
+        "/dev/null",
+        "-w",
+        "%{http_code}",
+        "--connect-timeout",
+        "2",
+        "--max-time",
+        "3",
+        "-x",
+        &format!("socks5h://127.0.0.1:{test_port}"),
+        "https://www.youtube.com",
+    ]);
+
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        curl_cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+
+    let curl_output = curl_cmd.output();
 
     let _ = child.kill();
     let _ = child.wait();
@@ -143,7 +197,11 @@ pub fn probe_strategy(tpws_bin: &PathBuf, preset: &StrategyPreset, test_port: u1
                     strategy_name: preset.name.clone(),
                     success: false,
                     latency_ms: None,
-                    error: Some(if code_str.is_empty() { "Timeout/Blocked".to_string() } else { format!("HTTP {code_str}") }),
+                    error: Some(if code_str.is_empty() {
+                        "Timeout/Blocked".to_string()
+                    } else {
+                        format!("HTTP {code_str}")
+                    }),
                 }
             }
         }

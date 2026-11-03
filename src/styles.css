@@ -544,6 +544,50 @@ ytd-masthead #yt-desktop-pill,
     transform: translateX(14px) !important;
 }
 
+/* Update Banner (Glass Zero Slop) */
+.yt-hud-update-banner {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    margin-bottom: 12px;
+    background: rgba(52, 199, 89, 0.1);
+    border: 1px solid rgba(52, 199, 89, 0.25);
+    border-radius: 8px;
+    font-size: 11px;
+    color: #34c759;
+}
+.yt-hud-update-banner.visible {
+    display: flex !important;
+}
+.yt-hud-update-info {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 500;
+}
+.yt-hud-update-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #34c759;
+    box-shadow: 0 0 8px rgba(52, 199, 89, 0.6);
+}
+.yt-hud-update-btn {
+    background: #34c759;
+    color: #09090b;
+    border: none;
+    border-radius: 5px;
+    padding: 3px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.12s ease;
+}
+.yt-hud-update-btn:hover {
+    opacity: 0.88;
+}
+
 /* HUD Footer */
 .yt-hud-footer {
     display: flex !important;

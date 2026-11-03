@@ -10,8 +10,15 @@ RESOURCES="$CONTENTS/Resources"
 
 echo "[*] Building tpws zapret engine..."
 cd "$DIR/tpws"
-cc -std=gnu99 -Imacos -Iepoll-shim/include -o tpws *.c epoll-shim/src/*.c -lz -lpthread
-strip tpws
+if command -v make >/dev/null 2>&1; then
+    make mac || {
+        cc -std=gnu99 -Imacos -Iepoll-shim/include -o tpws *.c epoll-shim/src/*.c -lz -lpthread
+        strip tpws
+    }
+else
+    cc -std=gnu99 -Imacos -Iepoll-shim/include -o tpws *.c epoll-shim/src/*.c -lz -lpthread
+    strip tpws
+fi
 
 echo "[*] Building release binary..."
 cd "$DIR"
@@ -25,8 +32,8 @@ cp "$DIR/target/release/yt-desktop" "$MACOS/yt-desktop"
 cp "$DIR/tpws/tpws" "$MACOS/tpws"
 chmod +x "$MACOS/yt-desktop" "$MACOS/tpws"
 
-if [ -f "/Users/a123/Projects/ytm-desktop/src-tauri/icons/icon.icns" ]; then
-    cp "/Users/a123/Projects/ytm-desktop/src-tauri/icons/icon.icns" "$RESOURCES/AppIcon.icns"
+if [ -f "$DIR/assets/AppIcon.icns" ]; then
+    cp "$DIR/assets/AppIcon.icns" "$RESOURCES/AppIcon.icns"
 fi
 
 cat << 'EOF' > "$CONTENTS/Info.plist"

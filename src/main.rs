@@ -1,6 +1,7 @@
 mod config;
 mod dpi;
 mod menu;
+mod updater;
 
 use config::{get_config_dir, load_config, save_config, AppConfig};
 use dpi::strategy::BenchmarkResult;
@@ -14,9 +15,11 @@ use tao::{
     dpi::{LogicalPosition, LogicalSize},
     event::{Event, WindowEvent},
     event_loop::{ControlFlow, EventLoopBuilder},
-    platform::macos::{ActivationPolicy, EventLoopExtMacOS},
     window::{Theme, Window, WindowBuilder},
 };
+#[cfg(target_os = "macos")]
+use tao::platform::macos::{ActivationPolicy, EventLoopExtMacOS};
+use updater::{check_for_updates, open_url_in_browser, UpdateInfo};
 use wry::{BackgroundThrottlingPolicy, ProxyConfig, ProxyEndpoint, WebContext, WebViewBuilder};
 
 const INJECT_CSS: &str = include_str!("styles.css");
@@ -49,6 +52,10 @@ enum MainIpcMessage {
     CompleteOnboarding { strategy_id: String, config: AppConfig },
     #[serde(rename = "show_hello")]
     ShowHello,
+    #[serde(rename = "check_for_updates")]
+    CheckForUpdates,
+    #[serde(rename = "open_url")]
+    OpenUrl { url: String },
 }
 
 enum AppEvent {
@@ -59,6 +66,8 @@ enum AppEvent {
     MenuItemClicked(String),
     UpdateHudState(serde_json::Value, serde_json::Value, bool),
     BenchmarkDone(Vec<BenchmarkResult>, serde_json::Value),
+    UpdateAvailable(UpdateInfo),
+    NoUpdateAvailable,
     VideoMetaLoaded {
         video_id: String,
         dislikes: serde_json::Value,
@@ -147,11 +156,15 @@ fn main() {
         }
     };
 
-    // 3. Create Event Loop with explicit macOS Regular Activation Policy
+    // 3. Create Event Loop
+    #[allow(unused_mut)]
     let mut event_loop = EventLoopBuilder::<AppEvent>::with_user_event().build();
-    event_loop.set_activation_policy(ActivationPolicy::Regular);
-    event_loop.set_activate_ignoring_other_apps(true);
-    event_loop.set_dock_visibility(true);
+    #[cfg(target_os = "macos")]
+    {
+        event_loop.set_activation_policy(ActivationPolicy::Regular);
+        event_loop.set_activate_ignoring_other_apps(true);
+        event_loop.set_dock_visibility(true);
+    }
 
     let proxy = event_loop.create_proxy();
 
@@ -168,7 +181,7 @@ fn main() {
         }
     };
 
-    // Hook native macOS menu clicks into Tao event loop
+    // Hook native menu clicks into Tao event loop
     let menu_proxy = proxy.clone();
     muda::MenuEvent::set_event_handler(Some(move |event: muda::MenuEvent| {
         let id_str = event.id().as_ref().to_string();
@@ -295,7 +308,18 @@ fn main() {
                     }
                     MainIpcMessage::OpenConfigFolder => {
                         let dir = get_config_dir();
+                        #[cfg(target_os = "macos")]
                         let _ = std::process::Command::new("open").arg(dir).spawn();
+                        #[cfg(target_os = "windows")]
+                        {
+                            use std::os::windows::process::CommandExt;
+                            let mut cmd = std::process::Command::new("explorer");
+                            cmd.arg(dir);
+                            cmd.creation_flags(0x08000000);
+                            let _ = cmd.spawn();
+                        }
+                        #[cfg(target_os = "linux")]
+                        let _ = std::process::Command::new("xdg-open").arg(dir).spawn();
                     }
                     MainIpcMessage::CompleteOnboarding { strategy_id, config: mut new_cfg } => {
                         new_cfg.first_run_completed = true;
@@ -317,33 +341,56 @@ fn main() {
                     MainIpcMessage::ShowHello => {
                         let _ = ipc_proxy.send_event(AppEvent::ShowHello);
                     }
+                    MainIpcMessage::CheckForUpdates => {
+                        let p = ipc_proxy.clone();
+                        thread::spawn(move || {
+                            if let Some(info) = check_for_updates() {
+                                let _ = p.send_event(AppEvent::UpdateAvailable(info));
+                            } else {
+                                let _ = p.send_event(AppEvent::NoUpdateAvailable);
+                            }
+                        });
+                    }
+                    MainIpcMessage::OpenUrl { url } => {
+                        open_url_in_browser(&url);
+                    }
                     MainIpcMessage::FetchVideoMeta { video_id } => {
                         let p = ipc_proxy.clone();
                         thread::spawn(move || {
                             println!("[META-FETCH] 🔍 Requesting metadata for video_id={video_id}...");
-                            let dislikes_out = std::process::Command::new("/usr/bin/curl")
-                                .args([
-                                    "-s",
-                                    "-A", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 yt-desktop/0.1.0",
-                                    "--connect-timeout", "4",
-                                    "--max-time", "6",
-                                    &format!("https://returnyoutubedislikeapi.com/votes?videoId={video_id}"),
-                                ])
-                                .output();
+                            let mut dislikes_cmd = std::process::Command::new("curl");
+                            dislikes_cmd.args([
+                                "-s",
+                                "-A", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 yt-desktop/0.1.0",
+                                "--connect-timeout", "4",
+                                "--max-time", "6",
+                                &format!("https://returnyoutubedislikeapi.com/votes?videoId={video_id}"),
+                            ]);
+                            #[cfg(target_os = "windows")]
+                            {
+                                use std::os::windows::process::CommandExt;
+                                dislikes_cmd.creation_flags(0x08000000);
+                            }
+                            let dislikes_out = dislikes_cmd.output();
 
                             let dislikes_val: serde_json::Value = dislikes_out.ok()
                                 .and_then(|o| serde_json::from_slice(&o.stdout).ok())
                                 .unwrap_or(serde_json::Value::Null);
 
-                            let sponsor_out = std::process::Command::new("/usr/bin/curl")
-                                .args([
-                                    "-s",
-                                    "-A", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 yt-desktop/0.1.0",
-                                    "--connect-timeout", "4",
-                                    "--max-time", "6",
-                                    &format!("https://sponsor.ajay.app/api/skipSegments?videoID={video_id}&categories=%5B%22sponsor%22%2C%22selfpromo%22%2C%22interaction%22%2C%22intro%22%2C%22outro%22%5D"),
-                                ])
-                                .output();
+                            let mut sponsor_cmd = std::process::Command::new("curl");
+                            sponsor_cmd.args([
+                                "-s",
+                                "-A", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 yt-desktop/0.1.0",
+                                "--connect-timeout", "4",
+                                "--max-time", "6",
+                                &format!("https://sponsor.ajay.app/api/skipSegments?videoID={video_id}&categories=%5B%22sponsor%22%2C%22selfpromo%22%2C%22interaction%22%2C%22intro%22%2C%22outro%22%5D"),
+                            ]);
+                            #[cfg(target_os = "windows")]
+                            {
+                                use std::os::windows::process::CommandExt;
+                                sponsor_cmd.creation_flags(0x08000000);
+                            }
+                            let sponsor_out = sponsor_cmd.output();
 
                             let segments_val: serde_json::Value = sponsor_out.ok()
                                 .and_then(|o| serde_json::from_slice(&o.stdout).ok())
@@ -390,6 +437,15 @@ fn main() {
         }
     }
 
+    // Launch background check for updates after 3 seconds
+    let updater_proxy = proxy.clone();
+    thread::spawn(move || {
+        thread::sleep(std::time::Duration::from_secs(3));
+        if let Some(info) = check_for_updates() {
+            let _ = updater_proxy.send_event(AppEvent::UpdateAvailable(info));
+        }
+    });
+
     let app_dir_clone = app_dir.clone();
     let _dpi_guard = dpi_manager;
     let _menu_guard = app_menu;
@@ -427,6 +483,16 @@ fn main() {
                     }
                     "app.welcome" => {
                         let _ = proxy.send_event(AppEvent::ShowHello);
+                    }
+                    "app.check_updates" => {
+                        let p = proxy.clone();
+                        thread::spawn(move || {
+                            if let Some(info) = check_for_updates() {
+                                let _ = p.send_event(AppEvent::UpdateAvailable(info));
+                            } else {
+                                let _ = p.send_event(AppEvent::NoUpdateAvailable);
+                            }
+                        });
                     }
                     "view.reload" => {
                         let _ = main_webview.evaluate_script("window.location.reload();");
@@ -481,6 +547,15 @@ fn main() {
                 let res_json = serde_json::to_string(&results).unwrap_or_else(|_| "[]".to_string());
                 let js = format!("if (window.__onBenchmarkDone) window.__onBenchmarkDone({}, {});", res_json, status);
                 let _ = main_webview.evaluate_script(&js);
+            }
+            Event::UserEvent(AppEvent::UpdateAvailable(info)) => {
+                let info_json = serde_json::to_string(&info).unwrap_or_else(|_| "{}".to_string());
+                let js = format!("if (window.__onUpdateAvailable) window.__onUpdateAvailable({});", info_json);
+                let _ = main_webview.evaluate_script(&js);
+            }
+            Event::UserEvent(AppEvent::NoUpdateAvailable) => {
+                let js = "if (window.__onNoUpdateAvailable) window.__onNoUpdateAvailable();";
+                let _ = main_webview.evaluate_script(js);
             }
             Event::UserEvent(AppEvent::VideoMetaLoaded { video_id, dislikes, segments }) => {
                 let js = format!(

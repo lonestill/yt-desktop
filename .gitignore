@@ -1,1 +1,8 @@
 /target
+YouTube.app
+tpws/tpws
+*.dmg
+*.zip
+*.tar.gz
+*.exe
+.DS_Store

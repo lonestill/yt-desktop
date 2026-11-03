@@ -881,6 +881,41 @@
             linksBox.appendChild(sep);
             linksBox.appendChild(openFolderBtn);
 
+            // Update Banner Container
+            const updateBanner = document.createElement('div');
+            updateBanner.id = 'yt-hud-update-banner';
+            updateBanner.className = 'yt-hud-update-banner';
+
+            const updateInfo = document.createElement('div');
+            updateInfo.className = 'yt-hud-update-info';
+            const updateDot = document.createElement('div');
+            updateDot.className = 'yt-hud-update-dot';
+            const updateText = document.createElement('span');
+            updateText.id = 'yt-hud-update-text';
+            updateText.textContent = 'Обновление доступно';
+            updateInfo.appendChild(updateDot);
+            updateInfo.appendChild(updateText);
+
+            const updateBtn = document.createElement('button');
+            updateBtn.className = 'yt-hud-update-btn';
+            updateBtn.textContent = 'Скачать';
+            updateBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (window.__latestUpdate && window.__latestUpdate.release_url) {
+                    postIpc({ type: 'open_url', url: window.__latestUpdate.release_url });
+                }
+            });
+
+            updateBanner.appendChild(updateInfo);
+            updateBanner.appendChild(updateBtn);
+            hud.appendChild(updateBanner);
+
+            // If update was already fetched prior to HUD mount
+            if (window.__latestUpdate) {
+                updateText.textContent = `Обновление ${window.__latestUpdate.latest_version} доступно`;
+                updateBanner.classList.add('visible');
+            }
+
             footer.appendChild(shortcut);
             footer.appendChild(linksBox);
             hud.appendChild(footer);
@@ -1036,6 +1071,38 @@
             }
         } catch (err) {
             console.error('[HUD] ❌ Error in __onBenchmarkDone: ' + (err.stack || err.message || String(err)));
+        }
+    };
+
+    window.__latestUpdate = null;
+    window.__onUpdateAvailable = function(info) {
+        window.__latestUpdate = info;
+        renderGlassPill();
+        renderControlCenterHud();
+        const banner = document.getElementById('yt-hud-update-banner');
+        const text = document.getElementById('yt-hud-update-text');
+        if (banner && text) {
+            text.textContent = `Обновление ${info.latest_version} доступно`;
+            banner.classList.add('visible');
+        }
+        const dot = document.getElementById('yt-pill-dot');
+        if (dot) {
+            dot.style.background = '#38bdf8';
+            dot.title = `Доступно обновление ${info.latest_version}`;
+        }
+    };
+
+    window.__onNoUpdateAvailable = function() {
+        renderGlassPill();
+        renderControlCenterHud();
+        const banner = document.getElementById('yt-hud-update-banner');
+        const text = document.getElementById('yt-hud-update-text');
+        if (banner && text) {
+            text.textContent = 'У вас актуальная версия';
+            banner.classList.add('visible');
+            setTimeout(() => {
+                banner.classList.remove('visible');
+            }, 3000);
         }
     };
 

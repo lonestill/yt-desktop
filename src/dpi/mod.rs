@@ -10,24 +10,30 @@ use std::time::Duration;
 use strategy::{get_available_strategies, probe_strategy, BenchmarkResult};
 
 pub fn find_tpws_binary() -> Option<PathBuf> {
-    // 1. Next to current executable (inside YouTube.app/Contents/MacOS/tpws)
+    let binary_names = ["tpws", "tpws.exe", "ciadpi.exe", "ciadpi"];
+
+    // 1. Next to current executable (inside YouTube.app/Contents/MacOS/ or next to yt-desktop)
     if let Ok(exe) = std::env::current_exe() {
         if let Some(parent) = exe.parent() {
-            let p = parent.join("tpws");
-            if p.is_file() {
-                return Some(p);
+            for name in &binary_names {
+                let p = parent.join(name);
+                if p.is_file() {
+                    return Some(p);
+                }
             }
         }
     }
-    // 2. Local workspace candidates
-    let candidate1 = Path::new("tpws/tpws");
-    if candidate1.is_file() {
-        return Some(candidate1.to_path_buf());
+
+    // 2. Local workspace and build directory candidates
+    for dir in &["tpws", "target/release", "target/debug", "."] {
+        for name in &binary_names {
+            let candidate = Path::new(dir).join(name);
+            if candidate.is_file() {
+                return Some(candidate);
+            }
+        }
     }
-    let candidate2 = Path::new("target/release/tpws");
-    if candidate2.is_file() {
-        return Some(candidate2.to_path_buf());
-    }
+
     None
 }
 
@@ -51,7 +57,7 @@ impl Drop for DpiManager {
 impl DpiManager {
     pub fn new(initial_config: &AppConfig) -> Result<Arc<Self>, Box<dyn std::error::Error + Send + Sync>> {
         let tpws_bin = find_tpws_binary()
-            .ok_or_else(|| "Native tpws binary not found in bundle or workspace".to_string())?;
+            .ok_or_else(|| "Anti-DPI binary (tpws / ciadpi.exe) not found in bundle or workspace".to_string())?;
 
         let port = {
             let l = TcpListener::bind("127.0.0.1:0")?;
@@ -80,6 +86,13 @@ impl DpiManager {
 
     pub fn spawn_tpws(&self, preset_id: &str, custom_args: &str) -> Result<(), String> {
         let presets = get_available_strategies();
+        let is_ciadpi = self
+            .tpws_bin
+            .file_name()
+            .and_then(|f| f.to_str())
+            .map(|s| s.contains("ciadpi"))
+            .unwrap_or(false);
+
         let args_to_use: Vec<String> = if preset_id == "custom" {
             custom_args
                 .split_whitespace()
@@ -90,7 +103,11 @@ impl DpiManager {
                 .iter()
                 .find(|p| p.id == preset_id)
                 .ok_or_else(|| format!("Unknown strategy ID: {preset_id}"))?;
-            preset.args.clone()
+            if is_ciadpi && !preset.win_args.is_empty() {
+                preset.win_args.clone()
+            } else {
+                preset.args.clone()
+            }
         };
 
         let mut lock = self.child.lock().map_err(|e| e.to_string())?;
@@ -102,27 +119,45 @@ impl DpiManager {
         }
 
         let mut cmd = Command::new(&self.tpws_bin);
-        cmd.args([
-            "--socks",
-            "--bind-addr=127.0.0.1",
-            &format!("--port={}", self.port),
-            "--debug=1",
-        ]);
+        if is_ciadpi {
+            cmd.args([
+                "-i",
+                "127.0.0.1",
+                "-p",
+                &self.port.to_string(),
+            ]);
+        } else {
+            cmd.args([
+                "--socks",
+                "--bind-addr=127.0.0.1",
+                &format!("--port={}", self.port),
+                "--debug=1",
+            ]);
+        }
+
         for arg in &args_to_use {
             cmd.arg(arg);
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
         }
 
         match cmd.spawn() {
             Ok(child) => {
                 println!(
-                    "[DPI-BYPASS] ⚡ Activated strategy '{}' on port {}",
-                    preset_id, self.port
+                    "[DPI-BYPASS] ⚡ Activated strategy '{}' (engine: {}) on port {}",
+                    preset_id,
+                    if is_ciadpi { "ciadpi" } else { "tpws" },
+                    self.port
                 );
                 *lock = Some(child);
                 thread::sleep(Duration::from_millis(60));
                 Ok(())
             }
-            Err(e) => Err(format!("Failed to spawn tpws: {e}")),
+            Err(e) => Err(format!("Failed to spawn DPI engine: {e}")),
         }
     }
 

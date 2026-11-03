@@ -3,6 +3,11 @@ use muda::{
     CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu,
 };
 
+#[cfg(target_os = "macos")]
+const MOD_CMD: Modifiers = Modifiers::META;
+#[cfg(not(target_os = "macos"))]
+const MOD_CMD: Modifiers = Modifiers::CONTROL;
+
 pub struct AppMenu {
     #[allow(dead_code)]
     pub menu: Menu,
@@ -24,7 +29,7 @@ impl AppMenu {
             "app.preferences",
             "Настройки...",
             true,
-            Some(Accelerator::new(Modifiers::META, Code::Comma)),
+            Some(Accelerator::new(MOD_CMD, Code::Comma)),
         );
         let welcome_item = MenuItem::with_id(
             "app.welcome",
@@ -32,10 +37,17 @@ impl AppMenu {
             true,
             None,
         );
+        let check_updates_item = MenuItem::with_id(
+            "app.check_updates",
+            "🔄 Проверить обновления...",
+            true,
+            None,
+        );
         app_menu.append(&PredefinedMenuItem::about(Some("О YouTube"), None))?;
         app_menu.append(&PredefinedMenuItem::separator())?;
         app_menu.append(&prefs_item)?;
         app_menu.append(&welcome_item)?;
+        app_menu.append(&check_updates_item)?;
         app_menu.append(&PredefinedMenuItem::separator())?;
         app_menu.append(&PredefinedMenuItem::services(None))?;
         app_menu.append(&PredefinedMenuItem::separator())?;
@@ -51,7 +63,7 @@ impl AppMenu {
             "dpi.benchmark",
             "🚀 Проверить сеть (Benchmark)",
             true,
-            Some(Accelerator::new(Modifiers::META | Modifiers::SHIFT, Code::KeyB)),
+            Some(Accelerator::new(MOD_CMD | Modifiers::SHIFT, Code::KeyB)),
         );
         dpi_menu.append(&bench_item)?;
         dpi_menu.append(&PredefinedMenuItem::separator())?;
@@ -75,7 +87,7 @@ impl AppMenu {
             "app.preferences",
             "⚙️ Параметры и Настройки...",
             true,
-            Some(Accelerator::new(Modifiers::META, Code::Comma)),
+            Some(Accelerator::new(MOD_CMD, Code::Comma)),
         );
         dpi_menu.append(&dpi_prefs_item)?;
 
@@ -95,7 +107,7 @@ impl AppMenu {
             "view.reload",
             "Перезагрузить страницу",
             true,
-            Some(Accelerator::new(Modifiers::META, Code::KeyR)),
+            Some(Accelerator::new(MOD_CMD, Code::KeyR)),
         ))?;
         view_menu.append(&PredefinedMenuItem::separator())?;
         view_menu.append(&PredefinedMenuItem::fullscreen(Some("Полноэкранный режим")))?;
