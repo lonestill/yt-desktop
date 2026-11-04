@@ -115,7 +115,35 @@ fn save_window_state(app_dir: &PathBuf, window: &Window) {
     }
 }
 
+#[cfg(target_os = "windows")]
+fn cleanup_orphaned_yt_processes() {
+    use std::process::Command;
+    use std::os::windows::process::CommandExt;
+    let my_pid = std::process::id();
+
+    // 1. Instantly kill any lingering ciadpi.exe processes
+    let mut kill_ciadpi = Command::new("cmd");
+    kill_ciadpi.args(["/C", "taskkill /F /IM ciadpi.exe >nul 2>nul"]);
+    kill_ciadpi.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    let _ = kill_ciadpi.status();
+
+    // 2. Kill any stale msedgewebview2.exe holding yt-desktop profile or old yt-desktop.exe instances
+    let ps_cmd = format!(
+        "Get-CimInstance Win32_Process | Where-Object {{ (($_.Name -eq 'msedgewebview2.exe' -and $_.CommandLine -like '*yt-desktop*') -or ($_.Name -eq 'yt-desktop.exe')) -and $_.ProcessId -ne {} }} | ForEach-Object {{ Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }}",
+        my_pid
+    );
+    let mut cmd = Command::new("powershell");
+    cmd.args(["-NoProfile", "-Command", &ps_cmd]);
+    cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    let _ = cmd.status();
+
+    std::thread::sleep(std::time::Duration::from_millis(150));
+}
+
 fn main() {
+    #[cfg(target_os = "windows")]
+    cleanup_orphaned_yt_processes();
+
     let app_dir = get_config_dir();
     let window_state = load_window_state(&app_dir);
 
@@ -203,7 +231,9 @@ fn main() {
     #[cfg(target_os = "windows")]
     if let Some(menu) = &app_menu {
         use tao::platform::windows::WindowExtWindows;
-        unsafe { menu.menu.init_for_hwnd(main_window.hwnd()).expect("Failed to attach menu"); }
+        if let Err(e) = unsafe { menu.menu.init_for_hwnd(main_window.hwnd()) } {
+            eprintln!("[MENU] ⚠️ Warning: Failed to attach menu: {e}");
+        }
     }
     #[cfg(target_os = "linux")]
     if let Some(menu) = &app_menu {
@@ -422,8 +452,15 @@ fn main() {
         })
         .with_url("https://www.youtube.com");
     #[cfg(not(target_os = "linux"))]
-    let main_webview = main_webview.build(&main_window)
-        .expect("Failed to initialize webview");
+    let main_webview = match main_webview.build(&main_window) {
+        Ok(wv) => wv,
+        Err(e) => {
+            eprintln!("[FATAL-WEBVIEW] ❌ Failed to initialize WebView2: {e:?}");
+            let err_msg = format!("Failed to initialize WebView2: {e:?}\nCheck orphaned processes or profile locks.");
+            let _ = std::fs::write(app_dir.join("crash_log.txt"), &err_msg);
+            panic!("Failed to initialize webview: {e}");
+        }
+    };
     #[cfg(target_os = "linux")]
     let main_webview = {
         use tao::platform::unix::WindowExtUnix;
@@ -590,7 +627,12 @@ fn main() {
             } => {
                 if window_id == main_window_id {
                     save_window_state(&app_dir_clone, &main_window);
+                    #[cfg(target_os = "windows")]
+                    {
+                        dpi_clone.stop();
+                    }
                     *control_flow = ControlFlow::Exit;
+                    std::process::exit(0);
                 }
             }
             _ => (),

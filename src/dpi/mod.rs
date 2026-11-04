@@ -37,8 +37,45 @@ pub fn find_tpws_binary() -> Option<PathBuf> {
     None
 }
 
+pub fn get_physical_ipv4() -> Option<String> {
+    #[cfg(target_os = "windows")]
+    {
+        use std::process::Command;
+        use std::os::windows::process::CommandExt;
+        let mut cmd = Command::new("ipconfig");
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        if let Ok(output) = cmd.output() {
+            let text = String::from_utf8_lossy(&output.stdout);
+            let mut in_ignored_adapter = false;
+            for line in text.lines() {
+                let trimmed = line.trim();
+                let lower = line.to_lowercase();
+                if lower.contains("adapter") || lower.contains("адаптер") {
+                    in_ignored_adapter = lower.contains("prizrak")
+                        || lower.contains("tunnel")
+                        || lower.contains("vpn")
+                        || lower.contains("wintun")
+                        || lower.contains("tap")
+                        || lower.contains("tailscale")
+                        || lower.contains("wireguard")
+                        || lower.contains("loopback");
+                } else if !in_ignored_adapter && (trimmed.starts_with("IPv4") || trimmed.contains("IPv4-адрес") || trimmed.contains("IPv4 Address")) {
+                    if let Some(idx) = trimmed.rfind(':') {
+                        let ip = trimmed[idx + 1..].trim();
+                        if !ip.starts_with("127.") && !ip.starts_with("169.254.") && !ip.starts_with("198.18.") {
+                            return Some(ip.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
 pub struct DpiManager {
     pub port: u16,
+    pub conn_ip: Option<String>,
     tpws_bin: PathBuf,
     child: Mutex<Option<Child>>,
 }
@@ -55,6 +92,15 @@ impl Drop for DpiManager {
 }
 
 impl DpiManager {
+    pub fn stop(&self) {
+        if let Ok(mut lock) = self.child.lock() {
+            if let Some(mut child) = lock.take() {
+                let _ = child.kill();
+                let _ = child.wait();
+            }
+        }
+    }
+
     pub fn new(initial_config: &AppConfig) -> Result<Arc<Self>, Box<dyn std::error::Error + Send + Sync>> {
         let tpws_bin = find_tpws_binary()
             .ok_or_else(|| "Anti-DPI binary (tpws / ciadpi.exe) not found in bundle or workspace".to_string())?;
@@ -64,8 +110,14 @@ impl DpiManager {
             l.local_addr()?.port()
         };
 
+        let conn_ip = get_physical_ipv4();
+        if let Some(ref ip) = conn_ip {
+            println!("[DPI-BYPASS] 🌐 Physical interface IP detected: {ip}");
+        }
+
         let manager = Arc::new(Self {
             port,
+            conn_ip,
             tpws_bin,
             child: Mutex::new(None),
         });
@@ -78,7 +130,10 @@ impl DpiManager {
 
         if let Err(e) = manager.spawn_tpws(active_id, &initial_config.custom_tpws_args) {
             eprintln!("[DPI-BYPASS] ⚠️ Initial spawn of strategy '{active_id}' failed: {e}");
-            manager.spawn_tpws("rostelecom", "")?;
+            if let Err(e2) = manager.spawn_tpws("rostelecom", "") {
+                eprintln!("[DPI-BYPASS] ⚠️ Fallback to rostelecom failed: {e2}. Falling back to direct...");
+                let _ = manager.spawn_tpws("direct", "");
+            }
         }
 
         Ok(manager)
@@ -126,6 +181,9 @@ impl DpiManager {
                 "-p",
                 &self.port.to_string(),
             ]);
+            if let Some(ref ip) = self.conn_ip {
+                cmd.args(["-I", ip]);
+            }
         } else {
             cmd.args([
                 "--socks",
@@ -206,14 +264,16 @@ impl DpiManager {
         let presets = get_available_strategies();
         let tpws_bin = self.tpws_bin.clone();
         let pid = std::process::id() as u16;
+        let conn_ip = self.conn_ip.clone();
 
         println!("[DPI-BENCHMARK] 🚀 Probing {} strategies in parallel...", presets.len());
 
         let mut handles = Vec::new();
         for (i, preset) in presets.into_iter().enumerate() {
             let bin = tpws_bin.clone();
+            let ip_clone = conn_ip.clone();
             let test_port = 52000 + (pid % 5000) + (i as u16 * 10);
-            handles.push(thread::spawn(move || probe_strategy(&bin, &preset, test_port)));
+            handles.push(thread::spawn(move || probe_strategy(&bin, &preset, test_port, ip_clone.as_deref())));
         }
 
         let mut results = Vec::new();
@@ -229,14 +289,16 @@ impl DpiManager {
     pub fn benchmark_and_select_best(tpws_bin: &PathBuf, config: &mut AppConfig) -> Vec<BenchmarkResult> {
         let presets = get_available_strategies();
         let pid = std::process::id() as u16;
+        let conn_ip = get_physical_ipv4();
 
         println!("[DPI-STARTUP] 🚀 Probing {} strategies in parallel to find best route...", presets.len());
 
         let mut handles = Vec::new();
         for (i, preset) in presets.into_iter().enumerate() {
             let bin = tpws_bin.clone();
+            let ip_clone = conn_ip.clone();
             let test_port = 52000 + (pid % 5000) + (i as u16 * 10);
-            handles.push(thread::spawn(move || probe_strategy(&bin, &preset, test_port)));
+            handles.push(thread::spawn(move || probe_strategy(&bin, &preset, test_port, ip_clone.as_deref())));
         }
 
         let mut results = Vec::new();
